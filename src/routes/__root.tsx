@@ -42,15 +42,29 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
 
+  const isEnvError = Boolean(error?.message?.includes("Missing Supabase environment variable") || error?.message?.includes("SUPABASE_"));
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="max-w-md text-center">
+      <div className="max-w-lg rounded-xl border border-border/80 bg-card p-6 text-center shadow-lg">
         <h1 className="text-xl font-semibold tracking-tight text-foreground">
-          This page didn't load
+          {isEnvError ? "Deployment Configuration Required" : "This page didn't load"}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong on our end. You can try refreshing or head back home.
+          {error?.message || "Something went wrong on our end. You can try refreshing or head back home."}
         </p>
+        {isEnvError && (
+          <div className="mt-4 rounded-lg bg-secondary/70 p-3 text-left font-mono text-xs text-muted-foreground">
+            <p className="font-sans font-semibold text-foreground">Add these in Vercel &gt; Settings &gt; Environment Variables:</p>
+            <ul className="mt-1.5 list-disc pl-4 space-y-0.5">
+              <li>VITE_SUPABASE_URL</li>
+              <li>VITE_SUPABASE_PUBLISHABLE_KEY</li>
+              <li>SUPABASE_URL</li>
+              <li>SUPABASE_SERVICE_ROLE_KEY</li>
+              <li>HPT_SESSION_SECRET</li>
+            </ul>
+          </div>
+        )}
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => {
