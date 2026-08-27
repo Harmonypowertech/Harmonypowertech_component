@@ -1,0 +1,6 @@
+- [x] Create `.env.example` file
+- [x] Explicitly add `.env.local` to `.gitignore`
+- [x] Update `src/integrations/supabase/client.ts` to replace Lovable error messages
+- [x] Update `src/integrations/supabase/client.server.ts` to replace Lovable error messages
+- [x] Update `src/integrations/supabase/auth-middleware.ts` to replace Lovable error messages
+- [x] Verify build and integration
