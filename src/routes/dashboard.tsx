@@ -498,15 +498,15 @@ function Dashboard() {
                 startIndex={(page - 1) * 100}
                 showMeta
                 renderActions={(item, onView) => (
-                  <div className="flex items-center justify-end gap-1.5">
+                  <div className="flex items-center justify-end gap-1 lg:gap-1.5">
                     <Button
                       size="sm"
                       variant="outline"
                       onClick={() => onView(item)}
                       title="View component details"
-                      className="flex items-center gap-1"
+                      className="h-7 px-2 text-[11px] lg:h-8 lg:px-2.5 lg:text-xs flex items-center gap-1"
                     >
-                      <Eye className="size-3.5" aria-hidden />
+                      <Eye className="size-3 lg:size-3.5" aria-hidden />
                       <span>View</span>
                     </Button>
                     <Button
@@ -517,13 +517,18 @@ function Dashboard() {
                         setPickQuantity("1");
                         setPickReason("");
                       }}
-                      className="flex items-center gap-1 border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 dark:text-amber-400"
+                      className="h-7 px-2 text-[11px] lg:h-8 lg:px-2.5 lg:text-xs flex items-center gap-1 border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 dark:text-amber-400"
                     >
-                      <PackageMinus className="size-3.5" aria-hidden />
+                      <PackageMinus className="size-3 lg:size-3.5" aria-hidden />
                       <span>Pick</span>
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => openEdit(item)} className="flex items-center gap-1">
-                      <Pencil className="size-3.5" aria-hidden />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openEdit(item)}
+                      className="h-7 px-2 text-[11px] lg:h-8 lg:px-2.5 lg:text-xs flex items-center gap-1"
+                    >
+                      <Pencil className="size-3 lg:size-3.5" aria-hidden />
                       <span>Edit</span>
                     </Button>
                   </div>

@@ -596,16 +596,16 @@ function AdminConsole() {
                   startIndex={(page - 1) * 100}
                   showMeta
                   renderActions={(item, onView) => (
-                    <div className="flex justify-end gap-1.5">
+                    <div className="flex justify-end gap-1 xl:gap-1.5">
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => onView(item)}
                         title="View component details"
-                        className="flex items-center gap-1"
+                        className="h-7 px-1.5 text-[11px] xl:h-8 xl:px-2.5 xl:text-xs flex items-center gap-1"
                       >
-                        <Eye className="size-3.5" aria-hidden />
-                        <span className="hidden sm:inline">View</span>
+                        <Eye className="size-3 xl:size-3.5" aria-hidden />
+                        <span className="hidden xl:inline">View</span>
                       </Button>
                       <Button
                         size="sm"
@@ -616,16 +616,28 @@ function AdminConsole() {
                           setPickReason("");
                         }}
                         title="Pick component"
-                        className="flex items-center gap-1 border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 dark:text-amber-400"
+                        className="h-7 px-1.5 text-[11px] xl:h-8 xl:px-2.5 xl:text-xs flex items-center gap-1 border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 dark:text-amber-400"
                       >
-                        <PackageMinus className="size-3.5" aria-hidden />
-                        <span className="hidden sm:inline">Pick</span>
+                        <PackageMinus className="size-3 xl:size-3.5" aria-hidden />
+                        <span className="hidden xl:inline">Pick</span>
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => openEdit(item)} title="Edit component">
-                        <Pencil className="size-3.5" aria-hidden />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openEdit(item)}
+                        title="Edit component"
+                        className="h-7 px-1.5 xl:h-8 xl:px-2"
+                      >
+                        <Pencil className="size-3 xl:size-3.5" aria-hidden />
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => setDeleteComponentTarget(item)} title="Delete component">
-                        <Trash2 className="size-3.5 text-destructive" aria-hidden />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setDeleteComponentTarget(item)}
+                        title="Delete component"
+                        className="h-7 px-1.5 xl:h-8 xl:px-2"
+                      >
+                        <Trash2 className="size-3 xl:size-3.5 text-destructive" aria-hidden />
                       </Button>
                     </div>
                   )}
@@ -697,19 +709,19 @@ function AdminConsole() {
                   </p>
                 </div>
               ) : (
-                <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
-                  <table className="w-full table-fixed border-collapse text-left text-xs">
+                <div className="overflow-x-auto rounded-lg border border-border bg-card shadow-sm">
+                  <table className="w-full min-w-[900px] table-fixed border-collapse text-left text-xs md:text-[13px] lg:text-sm">
                     <thead>
-                      <tr className="border-b border-border bg-secondary/80 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        <th scope="col" className="w-[4%] px-2 py-3 text-center text-primary">#</th>
-                        <th scope="col" className="w-[14%] px-2.5 py-3 text-primary">Component</th>
-                        <th scope="col" className="w-[10%] px-2 py-3 text-primary">Part No.</th>
-                        <th scope="col" className="w-[6%] px-2 py-3 text-primary">Cupboard</th>
-                        <th scope="col" className="w-[8%] px-2 py-3 text-center text-primary">Qty Taken</th>
-                        <th scope="col" className="w-[8%] px-2 py-3 text-center text-primary">Stock (Before &rarr; After)</th>
-                        <th scope="col" className="w-[28%] px-3 py-3 text-primary">Reason for Taking</th>
-                        <th scope="col" className="w-[11%] px-2 py-3 text-primary">Taken By (Employee)</th>
-                        <th scope="col" className="w-[11%] px-2 py-3 text-primary">Date &amp; Time</th>
+                      <tr className="border-b border-border bg-secondary/80 text-[8px] font-semibold uppercase tracking-wider text-muted-foreground md:text-[9px] lg:text-[10px]">
+                        <th scope="col" className="w-[4%] min-w-[36px] px-2 py-3 text-center text-primary">#</th>
+                        <th scope="col" className="w-[14%] min-w-[120px] px-2.5 py-3 text-primary">Component</th>
+                        <th scope="col" className="w-[11%] min-w-[95px] px-2 py-3 text-primary">Part No.</th>
+                        <th scope="col" className="w-[6%] min-w-[60px] px-2 py-3 text-primary">Cupboard</th>
+                        <th scope="col" className="w-[8%] min-w-[70px] px-2 py-3 text-center text-primary">Qty Taken</th>
+                        <th scope="col" className="w-[9%] min-w-[80px] px-2 py-3 text-center text-primary">Stock (Before &rarr; After)</th>
+                        <th scope="col" className="w-[26%] min-w-[180px] px-3 py-3 text-primary">Reason for Taking</th>
+                        <th scope="col" className="w-[11%] min-w-[100px] px-2 py-3 text-primary">Taken By (Employee)</th>
+                        <th scope="col" className="w-[11%] min-w-[110px] px-2 py-3 text-primary">Date &amp; Time</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
