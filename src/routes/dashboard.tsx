@@ -2,7 +2,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
-import { AlertCircle, Boxes, ChevronLeft, ChevronRight, Layers, Loader2, PackageMinus, PackagePlus, Pencil, RotateCcw, Search, Tag, X } from "lucide-react";
+import { AlertCircle, Boxes, ChevronLeft, ChevronRight, Eye, Layers, Loader2, PackageMinus, PackagePlus, Pencil, RotateCcw, Search, Tag, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppHeader } from "@/components/hpt/AppHeader";
@@ -497,8 +497,18 @@ function Dashboard() {
                 items={items}
                 startIndex={(page - 1) * 100}
                 showMeta
-                renderActions={(item) => (
+                renderActions={(item, onView) => (
                   <div className="flex items-center justify-end gap-1.5">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onView(item)}
+                      title="View component details"
+                      className="flex items-center gap-1"
+                    >
+                      <Eye className="size-3.5" aria-hidden />
+                      <span>View</span>
+                    </Button>
                     <Button
                       size="sm"
                       variant="outline"

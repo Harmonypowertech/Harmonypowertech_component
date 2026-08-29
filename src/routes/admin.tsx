@@ -2,7 +2,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
-import { AlertCircle, Boxes, ChevronLeft, ChevronRight, History, KeyRound, Layers, Loader2, PackageMinus, Pencil, RotateCcw, Search, Trash2, UserPlus, Users, X } from "lucide-react";
+import { AlertCircle, Boxes, ChevronLeft, ChevronRight, Eye, History, KeyRound, Layers, Loader2, PackageMinus, Pencil, RotateCcw, Search, Trash2, UserPlus, Users, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppHeader } from "@/components/hpt/AppHeader";
@@ -595,8 +595,18 @@ function AdminConsole() {
                   items={components}
                   startIndex={(page - 1) * 100}
                   showMeta
-                  renderActions={(item) => (
+                  renderActions={(item, onView) => (
                     <div className="flex justify-end gap-1.5">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => onView(item)}
+                        title="View component details"
+                        className="flex items-center gap-1"
+                      >
+                        <Eye className="size-3.5" aria-hidden />
+                        <span className="hidden sm:inline">View</span>
+                      </Button>
                       <Button
                         size="sm"
                         variant="outline"
