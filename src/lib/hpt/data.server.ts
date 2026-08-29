@@ -230,6 +230,35 @@ export async function listSubCategories(): Promise<string[]> {
   return [];
 }
 
+export type LightComponentSuggestion = {
+  id?: string;
+  component_name?: string | null;
+  part_number?: string | null;
+  sub_category?: string | null;
+  cupboard_number?: string | null;
+  manufacturer?: string | null;
+  vendor?: string | null;
+  specification?: string | null;
+  package?: string | null;
+};
+
+export async function getAllComponentSuggestions(): Promise<LightComponentSuggestion[]> {
+  const client = await db();
+  try {
+    const { data, error } = await client
+      .from("components")
+      .select("id, component_name, part_number, sub_category, cupboard_number, manufacturer, vendor, specification, package")
+      .order("component_name", { ascending: true })
+      .limit(2000);
+    if (!error && data) {
+      return data as LightComponentSuggestion[];
+    }
+  } catch {
+    // Fallback
+  }
+  return [];
+}
+
 export async function searchComponents(
   query = "",
   nameFilter = "all",

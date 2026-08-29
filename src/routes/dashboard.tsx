@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import { AppHeader } from "@/components/hpt/AppHeader";
 import { ComponentTable } from "@/components/hpt/ComponentTable";
+import { SearchAutocomplete } from "@/components/hpt/SearchAutocomplete";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,6 +30,7 @@ import {
 import { getCurrentSession } from "@/lib/hpt/auth.functions";
 import {
   addComponentFn,
+  getAllComponentSuggestionsFn,
   getInventoryStatsFn,
   listComponentNamesFn,
   listSubCategoriesFn,
@@ -95,6 +97,7 @@ function Dashboard() {
   const getComponentNames = useServerFn(listComponentNamesFn);
   const getSubCategories = useServerFn(listSubCategoriesFn);
   const getInventoryStats = useServerFn(getInventoryStatsFn);
+  const getAllSuggestions = useServerFn(getAllComponentSuggestionsFn);
 
   const [term, setTerm] = useState("");
   const [query, setQuery] = useState("");
@@ -127,6 +130,12 @@ function Dashboard() {
   const subCategoriesQuery = useQuery({
     queryKey: ["sub-categories"],
     queryFn: () => getSubCategories(),
+  });
+
+  const allSuggestionsQuery = useQuery({
+    queryKey: ["all-component-suggestions"],
+    queryFn: () => getAllSuggestions(),
+    staleTime: 1000 * 60 * 5,
   });
 
   const list = useQuery({
@@ -344,31 +353,26 @@ function Dashboard() {
 
         <div className="card-elevated mt-6 p-4">
           <form onSubmit={submitSearch} className="flex flex-col gap-3 lg:flex-row lg:items-center">
-            {/* Search Input */}
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-              <Input
-                value={term}
-                onChange={(event) => setTerm(event.target.value)}
-                placeholder="Search by name, part number, manufacturer, vendor..."
-                className="pl-9"
-                aria-label="Search components"
-              />
-              {term && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTerm("");
-                    setQuery("");
-                    setPage(1);
-                  }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
-                  aria-label="Clear search"
-                >
-                  <X className="size-4" aria-hidden />
-                </button>
-              )}
-            </div>
+            {/* Search Input with Suggestions */}
+            <SearchAutocomplete
+              value={term}
+              onChange={(val) => setTerm(val)}
+              onSubmitSearch={(selectedQuery) => {
+                const q = selectedQuery.trim();
+                setTerm(q);
+                setQuery(q);
+                setPage(1);
+              }}
+              onClear={() => {
+                setTerm("");
+                setQuery("");
+                setPage(1);
+              }}
+              componentNames={namesQuery.data ?? []}
+              subCategories={subCategoriesQuery.data ?? []}
+              allComponents={allSuggestionsQuery.data ?? []}
+              placeholder="Search components by name, part number, manufacturer, vendor, cupboard..."
+            />
 
             {/* Component Name Filter (Fetched directly from DB) */}
             <div className="w-full lg:w-48">

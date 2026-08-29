@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import { AppHeader } from "@/components/hpt/AppHeader";
 import { ComponentTable } from "@/components/hpt/ComponentTable";
+import { SearchAutocomplete } from "@/components/hpt/SearchAutocomplete";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,7 +49,7 @@ import {
   resetPasswordFn,
   setUserStatusFn,
 } from "@/lib/hpt/admin.functions";
-import { deleteComponentFn, listComponentNamesFn, listSubCategoriesFn, pickComponentFn, searchComponentsFn, updateComponentFn } from "@/lib/hpt/components.functions";
+import { deleteComponentFn, getAllComponentSuggestionsFn, listComponentNamesFn, listSubCategoriesFn, pickComponentFn, searchComponentsFn, updateComponentFn } from "@/lib/hpt/components.functions";
 import { errorMessage, type ComponentRecord, type PickLogRecord } from "@/lib/hpt/types";
 
 export const Route = createFileRoute("/admin")({
@@ -121,6 +122,7 @@ function AdminConsole() {
   const getComponentNames = useServerFn(listComponentNamesFn);
   const getSubCategories = useServerFn(listSubCategoriesFn);
   const pickComponent = useServerFn(pickComponentFn);
+  const getAllSuggestions = useServerFn(getAllComponentSuggestionsFn);
 
   const [userForm, setUserForm] = useState(emptyUser);
   const [resetTarget, setResetTarget] = useState<{ id: string; name: string } | null>(null);
@@ -159,6 +161,11 @@ function AdminConsole() {
   const subCategoriesQuery = useQuery({
     queryKey: ["sub-categories"],
     queryFn: () => getSubCategories(),
+  });
+  const allSuggestionsQuery = useQuery({
+    queryKey: ["all-component-suggestions"],
+    queryFn: () => getAllSuggestions(),
+    staleTime: 1000 * 60 * 5,
   });
   const componentsQuery = useQuery({
     queryKey: ["admin", "components", query, nameFilter, subCategoryFilter, quantityFilter, page],
@@ -444,30 +451,26 @@ function AdminConsole() {
               }}
               className="flex flex-col gap-3 lg:flex-row lg:items-center"
             >
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-                <Input
-                  value={term}
-                  onChange={(event) => setTerm(event.target.value)}
-                  placeholder="Search components by name or part number..."
-                  className="pl-9"
-                  aria-label="Search components"
-                />
-                {term && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTerm("");
-                      setQuery("");
-                      setPage(1);
-                    }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
-                    aria-label="Clear search"
-                  >
-                    <X className="size-4" aria-hidden />
-                  </button>
-                )}
-              </div>
+              {/* Search Input with Suggestions */}
+              <SearchAutocomplete
+                value={term}
+                onChange={(val) => setTerm(val)}
+                onSubmitSearch={(selectedQuery) => {
+                  const q = selectedQuery.trim();
+                  setTerm(q);
+                  setQuery(q);
+                  setPage(1);
+                }}
+                onClear={() => {
+                  setTerm("");
+                  setQuery("");
+                  setPage(1);
+                }}
+                componentNames={namesQuery.data ?? []}
+                subCategories={subCategoriesQuery.data ?? []}
+                allComponents={allSuggestionsQuery.data ?? []}
+                placeholder="Search components by any field..."
+              />
 
               {/* Component Name Filter */}
               <div className="w-full lg:w-52">

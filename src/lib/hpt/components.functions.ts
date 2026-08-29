@@ -39,6 +39,13 @@ export const listSubCategoriesFn = createServerFn({ method: "GET" }).handler(asy
   return await listSubCategories();
 });
 
+export const getAllComponentSuggestionsFn = createServerFn({ method: "GET" }).handler(async () => {
+  const { requireUser } = await import("./session.server");
+  const { getAllComponentSuggestions } = await import("./data.server");
+  await requireUser();
+  return await getAllComponentSuggestions();
+});
+
 export const getInventoryStatsFn = createServerFn({ method: "GET" }).handler(async () => {
   const { requireUser } = await import("./session.server");
   const { getInventoryStats } = await import("./data.server");
