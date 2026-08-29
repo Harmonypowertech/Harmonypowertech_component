@@ -140,7 +140,14 @@ async function attachCreators(rows: Record<string, unknown>[]): Promise<Componen
     }
     return {
       ...(r as unknown as ComponentRecord),
-      sub_category: (r["sub_category"] as string) || "",
+      component_name: typeof r["component_name"] === "string" ? (r["component_name"] as string).toUpperCase() : ((r["component_name"] as string) || ""),
+      sub_category: typeof r["sub_category"] === "string" ? (r["sub_category"] as string).toUpperCase() : "",
+      part_number: typeof r["part_number"] === "string" ? (r["part_number"] as string).toUpperCase() : ((r["part_number"] as string) || ""),
+      cupboard_number: typeof r["cupboard_number"] === "string" ? (r["cupboard_number"] as string).toUpperCase() : ((r["cupboard_number"] as string) || ""),
+      manufacturer: typeof r["manufacturer"] === "string" ? (r["manufacturer"] as string).toUpperCase() : (r["manufacturer"] as string | null | undefined) ?? null,
+      vendor: typeof r["vendor"] === "string" ? (r["vendor"] as string).toUpperCase() : (r["vendor"] as string | null | undefined) ?? null,
+      specification: typeof r["specification"] === "string" ? (r["specification"] as string).toUpperCase() : (r["specification"] as string | null | undefined) ?? null,
+      package: typeof r["package"] === "string" ? (r["package"] as string).toUpperCase() : (r["package"] as string | null | undefined) ?? null,
       created_by_name: resolvedName || (r["is_demo"] ? "Demo Data" : "HPT Administrator"),
     };
   });
@@ -170,7 +177,11 @@ export async function listComponentNames(): Promise<string[]> {
     });
     if (!error && data && Array.isArray(data)) {
       const names = Array.from(
-        new Set((data as ComponentRecord[]).map((c) => c.component_name).filter(Boolean)),
+        new Set(
+          (data as ComponentRecord[])
+            .map((c) => (c.component_name || "").trim().toUpperCase())
+            .filter(Boolean),
+        ),
       ).sort((a, b) => a.localeCompare(b));
       return names;
     }
@@ -185,7 +196,11 @@ export async function listComponentNames(): Promise<string[]> {
     .limit(1000);
 
   const names = Array.from(
-    new Set((data ?? []).map((row) => row.component_name).filter(Boolean)),
+    new Set(
+      (data ?? [])
+        .map((row) => (row.component_name || "").trim().toUpperCase())
+        .filter(Boolean),
+    ),
   ) as string[];
   return names;
 }
@@ -203,7 +218,7 @@ export async function listSubCategories(): Promise<string[]> {
       const list = Array.from(
         new Set(
           data
-            .map((r: { sub_category?: string | null }) => (r.sub_category || "").trim())
+            .map((r: { sub_category?: string | null }) => (r.sub_category || "").trim().toUpperCase())
             .filter(Boolean),
         ),
       ).sort((a, b) => a.localeCompare(b));
@@ -336,14 +351,14 @@ export type ComponentInput = {
 };
 
 function validateComponent(input: ComponentInput) {
-  const componentName = input.componentName.trim();
-  const subCategory = (input.subCategory ?? "").trim();
-  const partNumber = input.partNumber.trim();
-  const cupboardNumber = input.cupboardNumber.trim();
-  const manufacturer = (input.manufacturer ?? "").trim();
-  const vendor = (input.vendor ?? "").trim();
-  const specification = (input.specification ?? "").trim();
-  const pkg = (input.package ?? "").trim();
+  const componentName = input.componentName.trim().toUpperCase();
+  const subCategory = (input.subCategory ?? "").trim().toUpperCase();
+  const partNumber = input.partNumber.trim().toUpperCase();
+  const cupboardNumber = input.cupboardNumber.trim().toUpperCase();
+  const manufacturer = (input.manufacturer ?? "").trim().toUpperCase();
+  const vendor = (input.vendor ?? "").trim().toUpperCase();
+  const specification = (input.specification ?? "").trim().toUpperCase();
+  const pkg = (input.package ?? "").trim().toUpperCase();
 
   if (!componentName) fail("Component name is required.");
   if (!partNumber) fail("Part number is required.");
@@ -364,21 +379,131 @@ function validateComponent(input: ComponentInput) {
   };
 }
 
-export async function checkComponentDuplicate(componentName: string, partNumber: string, excludeId?: string): Promise<boolean> {
+export type ComponentDuplicateCheckInput = {
+  componentName: string;
+  subCategory?: string | null;
+  partNumber: string;
+  manufacturer?: string | null;
+  package?: string | null;
+  specification?: string | null;
+};
+
+export async function checkComponentDuplicate(input: ComponentDuplicateCheckInput, excludeId?: string): Promise<boolean> {
   const client = await db();
-  const nameClean = componentName.trim().toLowerCase();
-  const partClean = partNumber.trim().toLowerCase();
+  const nameClean = (input.componentName || "").trim().toUpperCase();
+  const subClean = (input.subCategory || "").trim().toUpperCase();
+  const partClean = (input.partNumber || "").trim().toUpperCase();
+  const mfgClean = (input.manufacturer || "").trim().toUpperCase();
+  const pkgClean = (input.package || "").trim().toUpperCase();
+  const specClean = (input.specification || "").trim().toUpperCase();
+
   if (!nameClean || !partClean) return false;
 
-  const { data: allComponents } = await client
-    .from("components")
-    .select("id, component_name, part_number");
+  let allComponents: Array<{
+    id: string;
+    component_name: string;
+    sub_category?: string | null;
+    part_number: string;
+    manufacturer?: string | null;
+    package?: string | null;
+    specification?: string | null;
+  }> | null = null;
+
+  try {
+    const { data, error } = await client
+      .from("components")
+      .select("id, component_name, sub_category, part_number, manufacturer, package, specification");
+    if (!error && data) {
+      allComponents = data;
+    }
+  } catch {
+    // Continue fallback
+  }
+
+  if (!allComponents) {
+    try {
+      const { data, error } = await client
+        .from("components")
+        .select("id, component_name, part_number, manufacturer, package, specification");
+      if (!error && data) {
+        allComponents = data;
+      }
+    } catch {
+      // Continue fallback
+    }
+  }
+
+  if (!allComponents) {
+    const { data } = await client
+      .from("components")
+      .select("id, component_name, part_number");
+    allComponents = data;
+  }
 
   return (allComponents ?? []).some((item) => {
     if (excludeId && item.id === excludeId) return false;
-    const cName = (item.component_name || "").trim().toLowerCase();
-    const pNum = (item.part_number || "").trim().toLowerCase();
-    return cName === nameClean && pNum === partClean;
+    const cName = (item.component_name || "").trim().toUpperCase();
+    const cSub = (item.sub_category || "").trim().toUpperCase();
+    const cPart = (item.part_number || "").trim().toUpperCase();
+    const cMfg = (item.manufacturer || "").trim().toUpperCase();
+    const cPkg = (item.package || "").trim().toUpperCase();
+    const cSpec = (item.specification || "").trim().toUpperCase();
+
+    // Entry is a duplicate IF AND ONLY IF all 6 fields match exactly.
+    // If at least one field is unique, it is valid!
+    return (
+      cName === nameClean &&
+      cSub === subClean &&
+      cPart === partClean &&
+      cMfg === mfgClean &&
+      cPkg === pkgClean &&
+      cSpec === specClean
+    );
+  });
+}
+
+export async function checkPartAndManufacturerDuplicate(
+  partNumber: string,
+  manufacturer: string,
+  excludeId?: string
+): Promise<boolean> {
+  const client = await db();
+  const partClean = (partNumber || "").trim().toUpperCase();
+  const mfgClean = (manufacturer || "").trim().toUpperCase();
+
+  if (!partClean) return false;
+
+  let allComponents: Array<{
+    id: string;
+    part_number: string;
+    manufacturer?: string | null;
+  }> | null = null;
+
+  try {
+    const { data, error } = await client
+      .from("components")
+      .select("id, part_number, manufacturer");
+    if (!error && data) {
+      allComponents = data;
+    }
+  } catch {
+    // Continue fallback
+  }
+
+  if (!allComponents) {
+    const { data } = await client
+      .from("components")
+      .select("id, part_number");
+    allComponents = data;
+  }
+
+  return (allComponents ?? []).some((item) => {
+    if (excludeId && item.id === excludeId) return false;
+    const cPart = (item.part_number || "").trim().toUpperCase();
+    const cMfg = (item.manufacturer || "").trim().toUpperCase();
+
+    // Duplicate if both Part Number and Manufacturer match
+    return cPart === partClean && cMfg === mfgClean;
   });
 }
 
@@ -386,10 +511,24 @@ export async function createComponent(input: ComponentInput, createdBy?: string)
   const client = await db();
   const v = validateComponent(input);
 
-  // Check if component with same name and part number already exists (case-insensitive & whitespace-trimmed)
-  const isDuplicate = await checkComponentDuplicate(v.componentName, v.partNumber);
-  if (isDuplicate) {
-    fail(`Validation Error: A component with Component Name "${v.componentName}" and Part Number "${v.partNumber}" already exists in the inventory. Duplicate entries are not allowed.`);
+  // 1st Validation: Check 6-field uniqueness before every single entry:
+  // Component Name, Sub Category, Part Number, Manufacturer, Package, Specification
+  const isSixFieldDuplicate = await checkComponentDuplicate({
+    componentName: v.componentName,
+    subCategory: v.subCategory,
+    partNumber: v.partNumber,
+    manufacturer: v.manufacturer,
+    package: v.package,
+    specification: v.specification,
+  });
+  if (isSixFieldDuplicate) {
+    fail(`Validation Error: An identical component already exists with the same Component Name (${v.componentName}), Sub Category (${v.subCategory || "—"}), Part Number (${v.partNumber}), Manufacturer (${v.manufacturer || "—"}), Package (${v.package || "—"}), and Specification (${v.specification || "—"}). At least one of these 6 details must be unique.`);
+  }
+
+  // 2nd Validation: Check combination of (Part Number + Manufacturer Name)
+  const isPartMfgDuplicate = await checkPartAndManufacturerDuplicate(v.partNumber, v.manufacturer);
+  if (isPartMfgDuplicate) {
+    fail(`Validation Error: A component with Part Number "${v.partNumber}" and Manufacturer Name "${v.manufacturer || "—"}" already exists in the inventory. The combination of Part Number and Manufacturer Name must be unique.`);
   }
 
   // Tier 1: Direct table insert with sub_category and all columns
@@ -497,10 +636,23 @@ export async function updateComponent(id: string, input: ComponentInput) {
   const client = await db();
   const v = validateComponent(input);
 
-  // Check if another component has the same name and part number
-  const isDuplicate = await checkComponentDuplicate(v.componentName, v.partNumber, id);
-  if (isDuplicate) {
-    fail(`Validation Error: Another component with Component Name "${v.componentName}" and Part Number "${v.partNumber}" already exists in the inventory. Duplicate entries are not allowed.`);
+  // 1st Validation: Check 6-field uniqueness before update
+  const isSixFieldDuplicate = await checkComponentDuplicate({
+    componentName: v.componentName,
+    subCategory: v.subCategory,
+    partNumber: v.partNumber,
+    manufacturer: v.manufacturer,
+    package: v.package,
+    specification: v.specification,
+  }, id);
+  if (isSixFieldDuplicate) {
+    fail(`Validation Error: Another component already exists with the same Component Name (${v.componentName}), Sub Category (${v.subCategory || "—"}), Part Number (${v.partNumber}), Manufacturer (${v.manufacturer || "—"}), Package (${v.package || "—"}), and Specification (${v.specification || "—"}). At least one of these 6 details must be unique.`);
+  }
+
+  // 2nd Validation: Check combination of (Part Number + Manufacturer Name)
+  const isPartMfgDuplicate = await checkPartAndManufacturerDuplicate(v.partNumber, v.manufacturer, id);
+  if (isPartMfgDuplicate) {
+    fail(`Validation Error: Another component with Part Number "${v.partNumber}" and Manufacturer Name "${v.manufacturer || "—"}" already exists in the inventory. The combination of Part Number and Manufacturer Name must be unique.`);
   }
 
   // Tier 1: Direct table update with sub_category

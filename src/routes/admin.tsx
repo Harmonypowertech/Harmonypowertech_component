@@ -221,15 +221,15 @@ function AdminConsole() {
       return updateComponent({
         data: {
           id: editing!.id,
-          componentName: editForm.componentName.trim(),
-          subCategory: editForm.subCategory.trim(),
-          partNumber: editForm.partNumber.trim(),
+          componentName: editForm.componentName.trim().toUpperCase(),
+          subCategory: editForm.subCategory.trim().toUpperCase(),
+          partNumber: editForm.partNumber.trim().toUpperCase(),
           quantity,
-          cupboardNumber: editForm.cupboardNumber.trim(),
-          manufacturer: editForm.manufacturer.trim(),
-          vendor: editForm.vendor.trim(),
-          specification: editForm.specification.trim(),
-          package: editForm.package.trim(),
+          cupboardNumber: editForm.cupboardNumber.trim().toUpperCase(),
+          manufacturer: editForm.manufacturer.trim().toUpperCase(),
+          vendor: editForm.vendor.trim().toUpperCase(),
+          specification: editForm.specification.trim().toUpperCase(),
+          package: editForm.package.trim().toUpperCase(),
         },
       });
     },
@@ -822,7 +822,8 @@ function AdminConsole() {
               <Input
                 id="editName"
                 value={editForm.componentName}
-                onChange={(e) => setEditForm({ ...editForm, componentName: e.target.value })}
+                onChange={(e) => setEditForm({ ...editForm, componentName: e.target.value.toUpperCase() })}
+                className="uppercase"
                 required
               />
             </div>
@@ -830,9 +831,10 @@ function AdminConsole() {
               <Label htmlFor="editSubCategory">Sub Category</Label>
               <Input
                 id="editSubCategory"
-                placeholder="e.g. SMD, Ceramic, Power, Electrolytic, IC, etc."
+                placeholder="e.g. SMD, CERAMIC, POWER, ELECTROLYTIC, IC, ETC."
                 value={editForm.subCategory}
-                onChange={(e) => setEditForm({ ...editForm, subCategory: e.target.value })}
+                onChange={(e) => setEditForm({ ...editForm, subCategory: e.target.value.toUpperCase() })}
+                className="uppercase"
               />
             </div>
             <div className="space-y-1.5">
@@ -840,7 +842,8 @@ function AdminConsole() {
               <Input
                 id="editPart"
                 value={editForm.partNumber}
-                onChange={(e) => setEditForm({ ...editForm, partNumber: e.target.value })}
+                onChange={(e) => setEditForm({ ...editForm, partNumber: e.target.value.toUpperCase() })}
+                className="uppercase"
                 required
               />
             </div>
@@ -862,7 +865,8 @@ function AdminConsole() {
                 <Input
                   id="editCupboard"
                   value={editForm.cupboardNumber}
-                  onChange={(e) => setEditForm({ ...editForm, cupboardNumber: e.target.value })}
+                  onChange={(e) => setEditForm({ ...editForm, cupboardNumber: e.target.value.toUpperCase() })}
+                  className="uppercase"
                   required
                 />
               </div>
@@ -873,18 +877,20 @@ function AdminConsole() {
                 <Label htmlFor="editAdminManufacturer">Manufacturer Name</Label>
                 <Input
                   id="editAdminManufacturer"
-                  placeholder="e.g. Texas Instruments"
+                  placeholder="e.g. TEXAS INSTRUMENTS"
                   value={editForm.manufacturer}
-                  onChange={(e) => setEditForm({ ...editForm, manufacturer: e.target.value })}
+                  onChange={(e) => setEditForm({ ...editForm, manufacturer: e.target.value.toUpperCase() })}
+                  className="uppercase"
                 />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="editAdminVendor">Vendor Name</Label>
                 <Input
                   id="editAdminVendor"
-                  placeholder="e.g. Mouser / DigiKey"
+                  placeholder="e.g. MOUSER / DIGIKEY"
                   value={editForm.vendor}
-                  onChange={(e) => setEditForm({ ...editForm, vendor: e.target.value })}
+                  onChange={(e) => setEditForm({ ...editForm, vendor: e.target.value.toUpperCase() })}
+                  className="uppercase"
                 />
               </div>
             </div>
@@ -896,16 +902,18 @@ function AdminConsole() {
                   id="editAdminPackage"
                   placeholder="e.g. SMD 0805 / DIP-8"
                   value={editForm.package}
-                  onChange={(e) => setEditForm({ ...editForm, package: e.target.value })}
+                  onChange={(e) => setEditForm({ ...editForm, package: e.target.value.toUpperCase() })}
+                  className="uppercase"
                 />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="editAdminSpecification">Specification</Label>
                 <Input
                   id="editAdminSpecification"
-                  placeholder="e.g. 1/4W 1% Tol"
+                  placeholder="e.g. 1/4W 1% TOL"
                   value={editForm.specification}
-                  onChange={(e) => setEditForm({ ...editForm, specification: e.target.value })}
+                  onChange={(e) => setEditForm({ ...editForm, specification: e.target.value.toUpperCase() })}
+                  className="uppercase"
                 />
               </div>
             </div>

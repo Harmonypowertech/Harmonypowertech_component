@@ -51,8 +51,8 @@ export function ComponentTable({ items, startIndex = 0, showMeta = false, render
                   {startIndex + index + 1}
                 </td>
                 <td className="px-2.5 py-2.5 font-medium text-foreground">
-                  <div className="flex items-center gap-1 overflow-hidden" title={item.component_name}>
-                    <span className="truncate">{item.component_name}</span>
+                  <div className="flex items-center gap-1 overflow-hidden" title={item.component_name?.toUpperCase()}>
+                    <span className="truncate">{item.component_name?.toUpperCase()}</span>
                     {item.is_demo && (
                       <Badge variant="outline" className="shrink-0 text-[8px] uppercase">
                         Demo
@@ -60,40 +60,40 @@ export function ComponentTable({ items, startIndex = 0, showMeta = false, render
                     )}
                   </div>
                 </td>
-                <td className="px-2 py-2.5 text-muted-foreground" title={item.sub_category ?? ""}>
+                <td className="px-2 py-2.5 text-muted-foreground" title={item.sub_category ? item.sub_category.toUpperCase() : ""}>
                   <span className="block truncate font-medium text-foreground/90">
-                    {item.sub_category && item.sub_category.trim() ? item.sub_category : "—"}
+                    {item.sub_category && item.sub_category.trim() ? item.sub_category.toUpperCase() : "—"}
                   </span>
                 </td>
-                <td className="px-2 py-2.5" title={item.part_number}>
+                <td className="px-2 py-2.5" title={item.part_number?.toUpperCase()}>
                   <span className="block truncate rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-foreground/80">
-                    {item.part_number}
+                    {item.part_number?.toUpperCase()}
                   </span>
                 </td>
                 <td className="px-1.5 py-2.5 text-center">
                   <QuantityBadge quantity={item.quantity} />
                 </td>
-                <td className="px-2 py-2.5 font-semibold text-accent" title={item.cupboard_number}>
-                  <span className="block truncate">{item.cupboard_number}</span>
+                <td className="px-2 py-2.5 font-semibold text-accent" title={item.cupboard_number?.toUpperCase()}>
+                  <span className="block truncate">{item.cupboard_number?.toUpperCase()}</span>
                 </td>
-                <td className="px-2 py-2.5 text-muted-foreground" title={item.manufacturer ?? ""}>
+                <td className="px-2 py-2.5 text-muted-foreground" title={item.manufacturer ? item.manufacturer.toUpperCase() : ""}>
                   <span className="block truncate">
-                    {item.manufacturer && item.manufacturer.trim() ? item.manufacturer : "—"}
+                    {item.manufacturer && item.manufacturer.trim() ? item.manufacturer.toUpperCase() : "—"}
                   </span>
                 </td>
-                <td className="px-2 py-2.5 text-muted-foreground" title={item.vendor ?? ""}>
+                <td className="px-2 py-2.5 text-muted-foreground" title={item.vendor ? item.vendor.toUpperCase() : ""}>
                   <span className="block truncate">
-                    {item.vendor && item.vendor.trim() ? item.vendor : "—"}
+                    {item.vendor && item.vendor.trim() ? item.vendor.toUpperCase() : "—"}
                   </span>
                 </td>
-                <td className="px-2 py-2.5 text-muted-foreground" title={item.package ?? ""}>
+                <td className="px-2 py-2.5 text-muted-foreground" title={item.package ? item.package.toUpperCase() : ""}>
                   <span className="block truncate">
-                    {item.package && item.package.trim() ? item.package : "—"}
+                    {item.package && item.package.trim() ? item.package.toUpperCase() : "—"}
                   </span>
                 </td>
-                <td className="px-2.5 py-2.5 text-muted-foreground" title={item.specification ?? ""}>
+                <td className="px-2.5 py-2.5 text-muted-foreground" title={item.specification ? item.specification.toUpperCase() : ""}>
                   <span className="block truncate">
-                    {item.specification && item.specification.trim() ? item.specification : "—"}
+                    {item.specification && item.specification.trim() ? item.specification.toUpperCase() : "—"}
                   </span>
                 </td>
                 {showMeta && (
@@ -127,7 +127,7 @@ export function ComponentTable({ items, startIndex = 0, showMeta = false, render
                 <Package className="mt-0.5 size-4 shrink-0 text-accent" aria-hidden />
                 <div>
                   <p className="font-semibold text-foreground">
-                    {item.component_name}
+                    {item.component_name?.toUpperCase()}
                     {item.is_demo && (
                       <Badge variant="outline" className="ml-2 text-[10px] uppercase">
                         Demo
@@ -135,9 +135,9 @@ export function ComponentTable({ items, startIndex = 0, showMeta = false, render
                     )}
                   </p>
                   {item.sub_category && item.sub_category.trim() && (
-                    <p className="text-xs font-medium text-primary">Sub Category: {item.sub_category}</p>
+                    <p className="text-xs font-medium text-primary">Sub Category: {item.sub_category.toUpperCase()}</p>
                   )}
-                  <p className="font-mono text-xs text-muted-foreground">{item.part_number}</p>
+                  <p className="font-mono text-xs text-muted-foreground">{item.part_number?.toUpperCase()}</p>
                 </div>
               </div>
               <QuantityBadge quantity={item.quantity} />
@@ -145,24 +145,24 @@ export function ComponentTable({ items, startIndex = 0, showMeta = false, render
             <dl className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-3 text-sm">
               <div>
                 <dt className="text-xs text-muted-foreground">Cupboard No.</dt>
-                <dd className="font-semibold text-accent">{item.cupboard_number}</dd>
+                <dd className="font-semibold text-accent">{item.cupboard_number?.toUpperCase()}</dd>
               </div>
               <div>
                 <dt className="text-xs text-muted-foreground">Manufacturer</dt>
-                <dd className="text-foreground">{item.manufacturer?.trim() || "—"}</dd>
+                <dd className="text-foreground">{item.manufacturer?.trim() ? item.manufacturer.toUpperCase() : "—"}</dd>
               </div>
               <div>
                 <dt className="text-xs text-muted-foreground">Vendor</dt>
-                <dd className="text-foreground">{item.vendor?.trim() || "—"}</dd>
+                <dd className="text-foreground">{item.vendor?.trim() ? item.vendor.toUpperCase() : "—"}</dd>
               </div>
               <div>
                 <dt className="text-xs text-muted-foreground">Package</dt>
-                <dd className="text-foreground">{item.package?.trim() || "—"}</dd>
+                <dd className="text-foreground">{item.package?.trim() ? item.package.toUpperCase() : "—"}</dd>
               </div>
               {item.specification?.trim() && (
                 <div className="col-span-2">
                   <dt className="text-xs text-muted-foreground">Specification</dt>
-                  <dd className="text-foreground">{item.specification}</dd>
+                  <dd className="text-foreground">{item.specification.toUpperCase()}</dd>
                 </div>
               )}
               {showMeta && (

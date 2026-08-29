@@ -211,15 +211,15 @@ function Dashboard() {
       return updateComponent({
         data: {
           id: editing!.id,
-          componentName: editForm.componentName.trim(),
-          subCategory: editForm.subCategory.trim(),
-          partNumber: editForm.partNumber.trim(),
+          componentName: editForm.componentName.trim().toUpperCase(),
+          subCategory: editForm.subCategory.trim().toUpperCase(),
+          partNumber: editForm.partNumber.trim().toUpperCase(),
           quantity,
-          cupboardNumber: editForm.cupboardNumber.trim(),
-          manufacturer: editForm.manufacturer.trim(),
-          vendor: editForm.vendor.trim(),
-          specification: editForm.specification.trim(),
-          package: editForm.package.trim(),
+          cupboardNumber: editForm.cupboardNumber.trim().toUpperCase(),
+          manufacturer: editForm.manufacturer.trim().toUpperCase(),
+          vendor: editForm.vendor.trim().toUpperCase(),
+          specification: editForm.specification.trim().toUpperCase(),
+          package: editForm.package.trim().toUpperCase(),
         },
       });
     },
@@ -264,15 +264,15 @@ function Dashboard() {
       return;
     }
     create.mutate({
-      componentName: form.componentName.trim(),
-      subCategory: form.subCategory.trim(),
-      partNumber: form.partNumber.trim(),
+      componentName: form.componentName.trim().toUpperCase(),
+      subCategory: form.subCategory.trim().toUpperCase(),
+      partNumber: form.partNumber.trim().toUpperCase(),
       quantity,
-      cupboardNumber: form.cupboardNumber.trim(),
-      manufacturer: form.manufacturer.trim(),
-      vendor: form.vendor.trim(),
-      specification: form.specification.trim(),
-      package: form.package.trim(),
+      cupboardNumber: form.cupboardNumber.trim().toUpperCase(),
+      manufacturer: form.manufacturer.trim().toUpperCase(),
+      vendor: form.vendor.trim().toUpperCase(),
+      specification: form.specification.trim().toUpperCase(),
+      package: form.package.trim().toUpperCase(),
     });
   }
 
@@ -580,9 +580,10 @@ function Dashboard() {
               <Label htmlFor="componentName">Component Name *</Label>
               <Input
                 id="componentName"
-                placeholder="e.g. 10K Resistor"
+                placeholder="e.g. 10K RESISTOR"
                 value={form.componentName}
-                onChange={(event) => setForm({ ...form, componentName: event.target.value })}
+                onChange={(event) => setForm({ ...form, componentName: event.target.value.toUpperCase() })}
+                className="uppercase"
                 required
               />
             </div>
@@ -590,9 +591,10 @@ function Dashboard() {
               <Label htmlFor="subCategory">Sub Category</Label>
               <Input
                 id="subCategory"
-                placeholder="e.g. SMD, Ceramic, Power, Electrolytic, IC, etc."
+                placeholder="e.g. SMD, CERAMIC, POWER, ELECTROLYTIC, IC, ETC."
                 value={form.subCategory}
-                onChange={(event) => setForm({ ...form, subCategory: event.target.value })}
+                onChange={(event) => setForm({ ...form, subCategory: event.target.value.toUpperCase() })}
+                className="uppercase"
               />
             </div>
             <div className="space-y-1.5">
@@ -601,7 +603,8 @@ function Dashboard() {
                 id="partNumber"
                 placeholder="e.g. R-10K-0805"
                 value={form.partNumber}
-                onChange={(event) => setForm({ ...form, partNumber: event.target.value })}
+                onChange={(event) => setForm({ ...form, partNumber: event.target.value.toUpperCase() })}
+                className="uppercase"
                 required
               />
             </div>
@@ -625,7 +628,8 @@ function Dashboard() {
                   id="cupboardNumber"
                   placeholder="e.g. C-01"
                   value={form.cupboardNumber}
-                  onChange={(event) => setForm({ ...form, cupboardNumber: event.target.value })}
+                  onChange={(event) => setForm({ ...form, cupboardNumber: event.target.value.toUpperCase() })}
+                  className="uppercase"
                   required
                 />
               </div>
@@ -636,18 +640,20 @@ function Dashboard() {
                 <Label htmlFor="manufacturer">Manufacturer Name</Label>
                 <Input
                   id="manufacturer"
-                  placeholder="e.g. Texas Instruments"
+                  placeholder="e.g. TEXAS INSTRUMENTS"
                   value={form.manufacturer}
-                  onChange={(event) => setForm({ ...form, manufacturer: event.target.value })}
+                  onChange={(event) => setForm({ ...form, manufacturer: event.target.value.toUpperCase() })}
+                  className="uppercase"
                 />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="vendor">Vendor Name</Label>
                 <Input
                   id="vendor"
-                  placeholder="e.g. Mouser / DigiKey"
+                  placeholder="e.g. MOUSER / DIGIKEY"
                   value={form.vendor}
-                  onChange={(event) => setForm({ ...form, vendor: event.target.value })}
+                  onChange={(event) => setForm({ ...form, vendor: event.target.value.toUpperCase() })}
+                  className="uppercase"
                 />
               </div>
             </div>
@@ -659,16 +665,18 @@ function Dashboard() {
                   id="package"
                   placeholder="e.g. SMD 0805 / DIP-8 / TO-220"
                   value={form.package}
-                  onChange={(event) => setForm({ ...form, package: event.target.value })}
+                  onChange={(event) => setForm({ ...form, package: event.target.value.toUpperCase() })}
+                  className="uppercase"
                 />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="specification">Specification</Label>
                 <Input
                   id="specification"
-                  placeholder="e.g. 1/4W 1% Tol"
+                  placeholder="e.g. 1/4W 1% TOL"
                   value={form.specification}
-                  onChange={(event) => setForm({ ...form, specification: event.target.value })}
+                  onChange={(event) => setForm({ ...form, specification: event.target.value.toUpperCase() })}
+                  className="uppercase"
                 />
               </div>
             </div>
@@ -717,7 +725,8 @@ function Dashboard() {
               <Input
                 id="editComponentName"
                 value={editForm.componentName}
-                onChange={(event) => setEditForm({ ...editForm, componentName: event.target.value })}
+                onChange={(event) => setEditForm({ ...editForm, componentName: event.target.value.toUpperCase() })}
+                className="uppercase"
                 required
               />
             </div>
@@ -725,9 +734,10 @@ function Dashboard() {
               <Label htmlFor="editSubCategory">Sub Category</Label>
               <Input
                 id="editSubCategory"
-                placeholder="e.g. SMD, Ceramic, Power, Electrolytic, IC, etc."
+                placeholder="e.g. SMD, CERAMIC, POWER, ELECTROLYTIC, IC, ETC."
                 value={editForm.subCategory}
-                onChange={(event) => setEditForm({ ...editForm, subCategory: event.target.value })}
+                onChange={(event) => setEditForm({ ...editForm, subCategory: event.target.value.toUpperCase() })}
+                className="uppercase"
               />
             </div>
             <div className="space-y-1.5">
@@ -735,7 +745,8 @@ function Dashboard() {
               <Input
                 id="editPartNumber"
                 value={editForm.partNumber}
-                onChange={(event) => setEditForm({ ...editForm, partNumber: event.target.value })}
+                onChange={(event) => setEditForm({ ...editForm, partNumber: event.target.value.toUpperCase() })}
+                className="uppercase"
                 required
               />
             </div>
@@ -757,7 +768,8 @@ function Dashboard() {
                 <Input
                   id="editCupboardNumber"
                   value={editForm.cupboardNumber}
-                  onChange={(event) => setEditForm({ ...editForm, cupboardNumber: event.target.value })}
+                  onChange={(event) => setEditForm({ ...editForm, cupboardNumber: event.target.value.toUpperCase() })}
+                  className="uppercase"
                   required
                 />
               </div>
@@ -768,18 +780,20 @@ function Dashboard() {
                 <Label htmlFor="editManufacturer">Manufacturer Name</Label>
                 <Input
                   id="editManufacturer"
-                  placeholder="e.g. Texas Instruments"
+                  placeholder="e.g. TEXAS INSTRUMENTS"
                   value={editForm.manufacturer}
-                  onChange={(event) => setEditForm({ ...editForm, manufacturer: event.target.value })}
+                  onChange={(event) => setEditForm({ ...editForm, manufacturer: event.target.value.toUpperCase() })}
+                  className="uppercase"
                 />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="editVendor">Vendor Name</Label>
                 <Input
                   id="editVendor"
-                  placeholder="e.g. Mouser / DigiKey"
+                  placeholder="e.g. MOUSER / DIGIKEY"
                   value={editForm.vendor}
-                  onChange={(event) => setEditForm({ ...editForm, vendor: event.target.value })}
+                  onChange={(event) => setEditForm({ ...editForm, vendor: event.target.value.toUpperCase() })}
+                  className="uppercase"
                 />
               </div>
             </div>
@@ -791,16 +805,18 @@ function Dashboard() {
                   id="editPackage"
                   placeholder="e.g. SMD 0805 / DIP-8"
                   value={editForm.package}
-                  onChange={(event) => setEditForm({ ...editForm, package: event.target.value })}
+                  onChange={(event) => setEditForm({ ...editForm, package: event.target.value.toUpperCase() })}
+                  className="uppercase"
                 />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="editSpecification">Specification</Label>
                 <Input
                   id="editSpecification"
-                  placeholder="e.g. 1/4W 1% Tol"
+                  placeholder="e.g. 1/4W 1% TOL"
                   value={editForm.specification}
-                  onChange={(event) => setEditForm({ ...editForm, specification: event.target.value })}
+                  onChange={(event) => setEditForm({ ...editForm, specification: event.target.value.toUpperCase() })}
+                  className="uppercase"
                 />
               </div>
             </div>
