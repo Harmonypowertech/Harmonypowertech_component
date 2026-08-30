@@ -53,6 +53,21 @@ export const getInventoryStatsFn = createServerFn({ method: "GET" }).handler(asy
   return await getInventoryStats();
 });
 
+export const checkPartAndPackageDuplicateFn = createServerFn({ method: "POST" })
+  .inputValidator(
+    (input: {
+      partNumber: string;
+      package?: string;
+      excludeId?: string;
+    }) => input,
+  )
+  .handler(async ({ data }) => {
+    const { requireUser } = await import("./session.server");
+    const { checkPartAndPackageDuplicate } = await import("./data.server");
+    await requireUser();
+    return await checkPartAndPackageDuplicate(data.partNumber, data.package, data.excludeId);
+  });
+
 export const addComponentFn = createServerFn({ method: "POST" })
   .inputValidator(
     (input: {

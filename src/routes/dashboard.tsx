@@ -30,6 +30,7 @@ import {
 import { getCurrentSession } from "@/lib/hpt/auth.functions";
 import {
   addComponentFn,
+  checkPartAndPackageDuplicateFn,
   getAllComponentSuggestionsFn,
   getInventoryStatsFn,
   listComponentNamesFn,
@@ -92,6 +93,7 @@ function Dashboard() {
   const queryClient = useQueryClient();
   const search = useServerFn(searchComponentsFn);
   const addComponent = useServerFn(addComponentFn);
+  const checkDuplicate = useServerFn(checkPartAndPackageDuplicateFn);
   const updateComponent = useServerFn(updateComponentFn);
   const pickComponent = useServerFn(pickComponentFn);
   const getComponentNames = useServerFn(listComponentNamesFn);
@@ -108,6 +110,8 @@ function Dashboard() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [addError, setAddError] = useState<string | null>(null);
+  const [duplicatePrompt, setDuplicatePrompt] = useState<{ partNumber: string; package: string } | null>(null);
+  const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
 
   const [editing, setEditing] = useState<ComponentRecord | null>(null);
   const [editForm, setEditForm] = useState(emptyForm);
@@ -167,6 +171,7 @@ function Dashboard() {
       toast.success("Component added successfully.");
       setForm(emptyForm);
       setAddError(null);
+      setDuplicatePrompt(null);
       setOpen(false);
       refreshComponents();
     },
@@ -260,9 +265,11 @@ function Dashboard() {
     setPage(1);
   }
 
-  function submitComponent(event: React.FormEvent) {
+  async function submitComponent(event: React.FormEvent) {
     event.preventDefault();
     setAddError(null);
+    setDuplicatePrompt(null);
+
     const quantity = Number(form.quantity);
     if (!form.componentName.trim() || !form.partNumber.trim() || !form.cupboardNumber.trim()) {
       toast.error("Please fill in Component Name, Part Number, and Cupboard Number.");
@@ -272,10 +279,59 @@ function Dashboard() {
       toast.error("Quantity must be a whole number of 0 or more.");
       return;
     }
+
+    const cleanPart = form.partNumber.trim().toUpperCase();
+    const cleanPkg = form.package.trim().toUpperCase();
+
+    try {
+      setIsCheckingDuplicate(true);
+      const isDuplicate = await checkDuplicate({
+        data: {
+          partNumber: cleanPart,
+          package: cleanPkg,
+        },
+      });
+
+      if (isDuplicate) {
+        setIsCheckingDuplicate(false);
+        setDuplicatePrompt({
+          partNumber: cleanPart,
+          package: cleanPkg,
+        });
+        return;
+      }
+    } catch {
+      // Continue to create on unexpected check failure
+    } finally {
+      setIsCheckingDuplicate(false);
+    }
+
     create.mutate({
       componentName: form.componentName.trim().toUpperCase(),
       subCategory: form.subCategory.trim().toUpperCase(),
-      partNumber: form.partNumber.trim().toUpperCase(),
+      partNumber: cleanPart,
+      quantity,
+      cupboardNumber: form.cupboardNumber.trim().toUpperCase(),
+      manufacturer: form.manufacturer.trim().toUpperCase(),
+      vendor: form.vendor.trim().toUpperCase(),
+      specification: form.specification.trim().toUpperCase(),
+      package: cleanPkg,
+    });
+  }
+
+  function handleAllowDuplicate() {
+    if (!duplicatePrompt) return;
+    const updatedPartNumber = `${duplicatePrompt.partNumber}(1)`;
+    const quantity = Number(form.quantity);
+
+    setForm((prev) => ({ ...prev, partNumber: updatedPartNumber }));
+    setDuplicatePrompt(null);
+    setAddError(null);
+
+    create.mutate({
+      componentName: form.componentName.trim().toUpperCase(),
+      subCategory: form.subCategory.trim().toUpperCase(),
+      partNumber: updatedPartNumber,
       quantity,
       cupboardNumber: form.cupboardNumber.trim().toUpperCase(),
       manufacturer: form.manufacturer.trim().toUpperCase(),
@@ -283,6 +339,10 @@ function Dashboard() {
       specification: form.specification.trim().toUpperCase(),
       package: form.package.trim().toUpperCase(),
     });
+  }
+
+  function handleDeclineDuplicate() {
+    setDuplicatePrompt(null);
   }
 
   function openEdit(item: ComponentRecord) {
@@ -576,21 +636,73 @@ function Dashboard() {
       </main>
 
       {/* Add Component Dialog */}
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={open}
+        onOpenChange={(isOpen) => {
+          setOpen(isOpen);
+          if (!isOpen) {
+            setAddError(null);
+            setDuplicatePrompt(null);
+          }
+        }}
+      >
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Add Component</DialogTitle>
             <DialogDescription>Record a new electronic component and its complete details.</DialogDescription>
           </DialogHeader>
           <form onSubmit={submitComponent} className="space-y-4">
-            {addError && (
+            {duplicatePrompt && (
+              <div
+                role="alert"
+                className="flex flex-col gap-2.5 rounded-lg border border-destructive/50 bg-destructive/10 p-3.5 text-xs text-destructive"
+              >
+                <div className="flex items-start gap-2.5">
+                  <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
+                  <div className="leading-snug">
+                    <span className="block font-semibold text-sm">
+                      Same part number and package exist in your inventory
+                    </span>
+                    <span className="mt-1 block text-foreground/80">
+                      Part Number: <strong>{duplicatePrompt.partNumber}</strong> | Package: <strong>{duplicatePrompt.package || "—"}</strong>
+                    </span>
+                    <p className="mt-1 text-foreground/90 font-medium">
+                      Would you like to add it as <span className="font-bold text-destructive underline">{duplicatePrompt.partNumber}(1)</span>?
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-8 bg-destructive text-destructive-foreground hover:bg-destructive/90 font-semibold px-4"
+                    onClick={handleAllowDuplicate}
+                    disabled={create.isPending}
+                  >
+                    {create.isPending && <Loader2 className="mr-1.5 size-3.5 animate-spin" aria-hidden />}
+                    Allow
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8"
+                    onClick={handleDeclineDuplicate}
+                  >
+                    Decline
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {addError && !duplicatePrompt && (
               <div
                 role="alert"
                 className="flex items-start gap-2.5 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive"
               >
                 <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
                 <div className="leading-snug">
-                  <span className="block font-semibold">Cannot Add Component (Duplicate Entry)</span>
+                  <span className="block font-semibold">Cannot Add Component</span>
                   <span>{addError}</span>
                 </div>
               </div>
@@ -701,11 +813,19 @@ function Dashboard() {
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setOpen(false);
+                  setDuplicatePrompt(null);
+                  setAddError(null);
+                }}
+              >
                 Cancel
               </Button>
-              <Button type="submit" disabled={create.isPending}>
-                {create.isPending && <Loader2 className="size-4 animate-spin" aria-hidden />}
+              <Button type="submit" disabled={create.isPending || isCheckingDuplicate}>
+                {(create.isPending || isCheckingDuplicate) && <Loader2 className="size-4 animate-spin" aria-hidden />}
                 Save Component
               </Button>
             </DialogFooter>
