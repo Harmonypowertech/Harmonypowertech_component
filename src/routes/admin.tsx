@@ -163,42 +163,42 @@ function AdminConsole() {
   const statsQuery = useQuery({
     queryKey: ["admin", "stats"],
     queryFn: () => stats(),
-    refetchInterval: 4000,
+    refetchInterval: 1500,
   });
   const usersQuery = useQuery({
     queryKey: ["admin", "users"],
     queryFn: () => listUsers(),
-    refetchInterval: 5000,
+    refetchInterval: 3000,
   });
   const namesQuery = useQuery({
     queryKey: ["component-names"],
     queryFn: () => getComponentNames(),
-    refetchInterval: 6000,
+    refetchInterval: 2500,
   });
   const subCategoriesQuery = useQuery({
     queryKey: ["sub-categories"],
     queryFn: () => getSubCategories(),
-    refetchInterval: 6000,
+    refetchInterval: 2500,
   });
   const allSuggestionsQuery = useQuery({
     queryKey: ["all-component-suggestions"],
     queryFn: () => getAllSuggestions(),
-    staleTime: 1000 * 60 * 3,
-    refetchInterval: 10000,
+    staleTime: 1000 * 30,
+    refetchInterval: 4000,
   });
   const componentsQuery = useQuery({
     queryKey: ["admin", "components", query, nameFilter, subCategoryFilter, quantityFilter, page],
     queryFn: () => searchComponents({ data: { query, nameFilter, subCategoryFilter, quantityFilter, page, pageSize: 100 } }),
-    refetchInterval: 3000,
+    refetchInterval: 1200,
   });
 
   function refreshAll() {
-    queryClient.invalidateQueries({ queryKey: ["admin"] });
-    queryClient.invalidateQueries({ queryKey: ["components"] });
-    queryClient.invalidateQueries({ queryKey: ["component-names"] });
-    queryClient.invalidateQueries({ queryKey: ["sub-categories"] });
-    queryClient.invalidateQueries({ queryKey: ["all-component-suggestions"] });
-    queryClient.invalidateQueries({ queryKey: ["inventory-stats"] });
+    queryClient.invalidateQueries({ queryKey: ["admin"], refetchType: "all" });
+    queryClient.invalidateQueries({ queryKey: ["components"], refetchType: "all" });
+    queryClient.invalidateQueries({ queryKey: ["component-names"], refetchType: "all" });
+    queryClient.invalidateQueries({ queryKey: ["sub-categories"], refetchType: "all" });
+    queryClient.invalidateQueries({ queryKey: ["all-component-suggestions"], refetchType: "all" });
+    queryClient.invalidateQueries({ queryKey: ["inventory-stats"], refetchType: "all" });
   }
 
   // Real-time Supabase Postgres Sync
@@ -438,6 +438,37 @@ function AdminConsole() {
         },
       });
     },
+    onMutate: async () => {
+      if (!editing) return;
+      const targetId = editing.id;
+      const quantity = Number(editForm.quantity);
+      const nowIso = new Date().toISOString();
+      queryClient.setQueriesData({ queryKey: ["admin", "components"] }, (old: any) => {
+        if (!old || !old.items) return old;
+        return {
+          ...old,
+          items: old.items.map((item: any) =>
+            item.id === targetId
+              ? {
+                  ...item,
+                  component_name: editForm.componentName.trim().toUpperCase(),
+                  sub_category: editForm.subCategory.trim().toUpperCase(),
+                  part_number: editForm.partNumber.trim().toUpperCase(),
+                  quantity,
+                  cupboard_number: editForm.cupboardNumber.trim().toUpperCase(),
+                  manufacturer: editForm.manufacturer.trim().toUpperCase(),
+                  vendor: editForm.vendor.trim().toUpperCase(),
+                  specification: editForm.specification.trim().toUpperCase(),
+                  package: editForm.package.trim().toUpperCase(),
+                  updated_by: session.uid,
+                  updated_by_name: session.name,
+                  updated_at: nowIso,
+                }
+              : item
+          ),
+        };
+      });
+    },
     onSuccess: () => {
       toast.success("Component updated.");
       setEditing(null);
@@ -448,17 +479,33 @@ function AdminConsole() {
       const msg = errorMessage(error, "Unable to update component.");
       setEditError(msg);
       toast.error(msg, { duration: 6000 });
+      refreshAll();
     },
   });
 
   const doDeleteComponent = useMutation({
     mutationFn: () => removeComponent({ data: { id: deleteComponentTarget!.id } }),
+    onMutate: async () => {
+      if (!deleteComponentTarget) return;
+      const targetId = deleteComponentTarget.id;
+      queryClient.setQueriesData({ queryKey: ["admin", "components"] }, (old: any) => {
+        if (!old || !old.items) return old;
+        return {
+          ...old,
+          total: Math.max(0, (old.total ?? old.items.length) - 1),
+          items: old.items.filter((item: any) => item.id !== targetId),
+        };
+      });
+    },
     onSuccess: () => {
       toast.success("Component deleted.");
       setDeleteComponentTarget(null);
       refreshAll();
     },
-    onError: (error) => toast.error(errorMessage(error, "Unable to delete component.")),
+    onError: (error) => {
+      toast.error(errorMessage(error, "Unable to delete component."));
+      refreshAll();
+    },
   });
 
   const doPickComponent = useMutation({
@@ -482,6 +529,22 @@ function AdminConsole() {
         },
       });
     },
+    onMutate: async () => {
+      if (!picking) return;
+      const q = Number(pickQuantity);
+      const targetId = picking.id;
+      queryClient.setQueriesData({ queryKey: ["admin", "components"] }, (old: any) => {
+        if (!old || !old.items) return old;
+        return {
+          ...old,
+          items: old.items.map((item: any) =>
+            item.id === targetId
+              ? { ...item, quantity: Math.max(0, item.quantity - q) }
+              : item
+          ),
+        };
+      });
+    },
     onSuccess: (res) => {
       toast.success(`Picked ${pickQuantity} unit(s) of ${picking?.component_name}. Remaining stock: ${res.remainingQuantity}`);
       setPicking(null);
@@ -489,7 +552,10 @@ function AdminConsole() {
       setPickReason("");
       refreshAll();
     },
-    onError: (error) => toast.error(errorMessage(error, "Unable to pick component.")),
+    onError: (error) => {
+      toast.error(errorMessage(error, "Unable to pick component."));
+      refreshAll();
+    },
   });
 
   function openEdit(item: ComponentRecord) {

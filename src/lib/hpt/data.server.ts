@@ -130,7 +130,7 @@ async function attachCreators(rows: Record<string, unknown>[]): Promise<Componen
     if (u.user_id) userMap.set(u.user_id.toLowerCase(), u.name);
   });
 
-  // Fetch recent edit logs in bulk for these component IDs if table exists
+  // Fetch recent edit logs in bulk for these component IDs from edit logs and pick logs
   const ids = rows.map((r) => r["id"] as string).filter(Boolean);
   const dbEditMap = new Map<string, { editorId: string; editorName: string }>();
   if (ids.length > 0) {
@@ -142,7 +142,7 @@ async function attachCreators(rows: Record<string, unknown>[]): Promise<Componen
         .order("created_at", { ascending: false });
 
       (editLogs ?? []).forEach((log: { component_id?: string; editor_id?: string; editor_name?: string }) => {
-        if (log.component_id && !dbEditMap.has(log.component_id)) {
+        if (log.component_id && !dbEditMap.has(log.component_id) && log.editor_name) {
           dbEditMap.set(log.component_id, {
             editorId: log.editor_id || "",
             editorName: log.editor_name || "",
@@ -151,6 +151,26 @@ async function attachCreators(rows: Record<string, unknown>[]): Promise<Componen
       });
     } catch {
       // Graceful fallback if table is not created
+    }
+
+    try {
+      const { data: pickEditLogs } = await client
+        .from("component_pick_logs")
+        .select("component_id, taken_by, taken_by_name, created_at, reason")
+        .in("component_id", ids)
+        .like("reason", "[EDIT]%")
+        .order("created_at", { ascending: false });
+
+      (pickEditLogs ?? []).forEach((log: { component_id?: string; taken_by?: string; taken_by_name?: string }) => {
+        if (log.component_id && !dbEditMap.has(log.component_id) && log.taken_by_name) {
+          dbEditMap.set(log.component_id, {
+            editorId: log.taken_by || "",
+            editorName: log.taken_by_name || "",
+          });
+        }
+      });
+    } catch {
+      // Graceful fallback
     }
   }
 
@@ -642,7 +662,26 @@ export async function updateComponent(
       created_at: nowIso,
     });
   } catch {
-    // If table doesn't exist, in-memory cache and updated_by column handle it
+    // If table doesn't exist, proceed to pick logs audit
+  }
+
+  // Also record in component_pick_logs as persistent zero-quantity audit record
+  try {
+    await client.from("component_pick_logs").insert({
+      component_id: id,
+      component_name: v.componentName,
+      part_number: v.partNumber,
+      cupboard_number: v.cupboardNumber || "",
+      quantity_taken: 0,
+      previous_quantity: v.quantity,
+      remaining_quantity: v.quantity,
+      reason: `[EDIT] Component details updated by ${updatedByName || "Employee"}`,
+      taken_by: updatedBy ?? null,
+      taken_by_name: updatedByName || "Employee",
+      created_at: nowIso,
+    });
+  } catch {
+    // Graceful fallback
   }
 
   // Tier 1: Direct table update with sub_category and updated_by
@@ -1015,7 +1054,7 @@ export async function deleteUser(id: string) {
 export async function getMyPickHistory(userId?: string, userName?: string): Promise<PickLogRecord[]> {
   const client = await db();
   try {
-    let query = client.from("component_pick_logs").select("*");
+    let query = client.from("component_pick_logs").select("*").gt("quantity_taken", 0);
     if (userId && userName) {
       query = query.or(`taken_by.eq.${userId},taken_by_name.ilike.%${userName}%`);
     } else if (userId) {
@@ -1047,7 +1086,7 @@ export async function dashboardStats() {
     client.from("components").select("id", { count: "exact", head: true }),
     client.from("components").select("quantity"),
     client.from("components").select(COMPONENT_COLUMNS).order("created_at", { ascending: false }).limit(20),
-    client.from("component_pick_logs").select("*").order("created_at", { ascending: false }).limit(500),
+    client.from("component_pick_logs").select("*").gt("quantity_taken", 0).order("created_at", { ascending: false }).limit(500),
   ]);
 
   const totalQuantity = (quantities.data ?? []).reduce((sum, row) => sum + (row.quantity ?? 0), 0);

@@ -125,42 +125,42 @@ function Dashboard() {
   const statsQuery = useQuery({
     queryKey: ["inventory-stats"],
     queryFn: () => getInventoryStats(),
-    refetchInterval: 4000,
+    refetchInterval: 1500,
   });
 
   const namesQuery = useQuery({
     queryKey: ["component-names"],
     queryFn: () => getComponentNames(),
-    refetchInterval: 6000,
+    refetchInterval: 2500,
   });
 
   const subCategoriesQuery = useQuery({
     queryKey: ["sub-categories"],
     queryFn: () => getSubCategories(),
-    refetchInterval: 6000,
+    refetchInterval: 2500,
   });
 
   const allSuggestionsQuery = useQuery({
     queryKey: ["all-component-suggestions"],
     queryFn: () => getAllSuggestions(),
-    staleTime: 1000 * 60 * 3,
-    refetchInterval: 10000,
+    staleTime: 1000 * 30,
+    refetchInterval: 4000,
   });
 
   const list = useQuery({
     queryKey: ["components", query, nameFilter, subCategoryFilter, quantityFilter, page],
     queryFn: () => search({ data: { query, nameFilter, subCategoryFilter, quantityFilter, page, pageSize: 100 } }),
-    refetchInterval: 3000,
+    refetchInterval: 1200,
   });
 
   function refreshComponents() {
-    queryClient.invalidateQueries({ queryKey: ["components"] });
-    queryClient.invalidateQueries({ queryKey: ["component-names"] });
-    queryClient.invalidateQueries({ queryKey: ["sub-categories"] });
-    queryClient.invalidateQueries({ queryKey: ["inventory-stats"] });
-    queryClient.invalidateQueries({ queryKey: ["all-component-suggestions"] });
-    queryClient.invalidateQueries({ queryKey: ["admin"] });
-    queryClient.invalidateQueries({ queryKey: ["my-pick-history"] });
+    queryClient.invalidateQueries({ queryKey: ["components"], refetchType: "all" });
+    queryClient.invalidateQueries({ queryKey: ["component-names"], refetchType: "all" });
+    queryClient.invalidateQueries({ queryKey: ["sub-categories"], refetchType: "all" });
+    queryClient.invalidateQueries({ queryKey: ["inventory-stats"], refetchType: "all" });
+    queryClient.invalidateQueries({ queryKey: ["all-component-suggestions"], refetchType: "all" });
+    queryClient.invalidateQueries({ queryKey: ["admin"], refetchType: "all" });
+    queryClient.invalidateQueries({ queryKey: ["my-pick-history"], refetchType: "all" });
   }
 
   // Real-time Postgres Changes Subscription for Multi-user Instant Sync
@@ -225,12 +225,23 @@ function Dashboard() {
       specification?: string;
       package?: string;
     }) => addComponent({ data: input }),
-    onSuccess: () => {
+    onSuccess: (newComp) => {
       toast.success("Component added successfully.");
       setForm(emptyForm);
       setAddError(null);
       setDuplicatePrompt(null);
       setOpen(false);
+
+      if (newComp) {
+        queryClient.setQueriesData({ queryKey: ["components"] }, (old: any) => {
+          if (!old || !old.items) return old;
+          return {
+            ...old,
+            total: (old.total ?? old.items.length) + 1,
+            items: [newComp, ...old.items],
+          };
+        });
+      }
       refreshComponents();
     },
     onError: (error) => {
@@ -261,6 +272,22 @@ function Dashboard() {
         },
       });
     },
+    onMutate: async () => {
+      if (!picking) return;
+      const q = Number(pickQuantity);
+      const targetId = picking.id;
+      queryClient.setQueriesData({ queryKey: ["components"] }, (old: any) => {
+        if (!old || !old.items) return old;
+        return {
+          ...old,
+          items: old.items.map((item: any) =>
+            item.id === targetId
+              ? { ...item, quantity: Math.max(0, item.quantity - q) }
+              : item
+          ),
+        };
+      });
+    },
     onSuccess: (res) => {
       toast.success(`Picked ${pickQuantity} unit(s) of ${picking?.component_name}. Remaining stock: ${res.remainingQuantity}`);
       setPicking(null);
@@ -268,7 +295,10 @@ function Dashboard() {
       setPickReason("");
       refreshComponents();
     },
-    onError: (error) => toast.error(errorMessage(error, "Unable to pick component.")),
+    onError: (error) => {
+      toast.error(errorMessage(error, "Unable to pick component."));
+      refreshComponents();
+    },
   });
 
   const update = useMutation({
@@ -295,6 +325,37 @@ function Dashboard() {
         },
       });
     },
+    onMutate: async () => {
+      if (!editing) return;
+      const targetId = editing.id;
+      const quantity = Number(editForm.quantity);
+      const nowIso = new Date().toISOString();
+      queryClient.setQueriesData({ queryKey: ["components"] }, (old: any) => {
+        if (!old || !old.items) return old;
+        return {
+          ...old,
+          items: old.items.map((item: any) =>
+            item.id === targetId
+              ? {
+                  ...item,
+                  component_name: editForm.componentName.trim().toUpperCase(),
+                  sub_category: editForm.subCategory.trim().toUpperCase(),
+                  part_number: editForm.partNumber.trim().toUpperCase(),
+                  quantity,
+                  cupboard_number: editForm.cupboardNumber.trim().toUpperCase(),
+                  manufacturer: editForm.manufacturer.trim().toUpperCase(),
+                  vendor: editForm.vendor.trim().toUpperCase(),
+                  specification: editForm.specification.trim().toUpperCase(),
+                  package: editForm.package.trim().toUpperCase(),
+                  updated_by: session.uid,
+                  updated_by_name: session.name,
+                  updated_at: nowIso,
+                }
+              : item
+          ),
+        };
+      });
+    },
     onSuccess: () => {
       toast.success("Component updated successfully.");
       setEditing(null);
@@ -305,6 +366,7 @@ function Dashboard() {
       const msg = errorMessage(error, "Unable to update component.");
       setEditError(msg);
       toast.error(msg, { duration: 6000 });
+      refreshComponents();
     },
   });
 

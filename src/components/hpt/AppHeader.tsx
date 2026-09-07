@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
-import { LogOut, Settings, ShieldCheck } from "lucide-react";
+import { useQueryClient, useIsFetching } from "@tanstack/react-query";
+import { LogOut, RefreshCw, Settings, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
 
@@ -19,6 +19,7 @@ type Props = {
 export function AppHeader({ title, userName, userId, role }: Props) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const isFetching = useIsFetching();
   const [busy, setBusy] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -35,6 +36,11 @@ export function AppHeader({ title, userName, userId, role }: Props) {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function handleManualRefresh() {
+    await queryClient.invalidateQueries();
+    toast.info("Refreshed latest inventory data");
   }
 
   return (
@@ -70,6 +76,27 @@ export function AppHeader({ title, userName, userId, role }: Props) {
 
           {/* User Profile & Navigation */}
           <div className="flex items-center justify-between gap-2 md:justify-end">
+            {/* Live Refresh / Sync Circular Loading Indicator */}
+            <button
+              type="button"
+              onClick={handleManualRefresh}
+              className={`group flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-all ${
+                isFetching > 0
+                  ? "border-primary/40 bg-primary/10 text-primary animate-pulse"
+                  : "border-border/80 bg-secondary/50 text-muted-foreground hover:border-border hover:bg-secondary hover:text-foreground"
+              }`}
+              title={isFetching > 0 ? "Synchronizing database..." : "Click to refresh data"}
+            >
+              <RefreshCw
+                className={`size-3.5 transition-transform duration-700 ${
+                  isFetching > 0 ? "animate-spin text-primary" : "group-hover:rotate-180 text-muted-foreground"
+                }`}
+              />
+              <span className="text-[11px] font-medium">
+                {isFetching > 0 ? "Refreshing..." : "Live"}
+              </span>
+            </button>
+
             <div className="flex items-center gap-2.5 rounded-lg border border-border/80 bg-secondary/60 px-3 py-1.5 shadow-2xs">
               <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-accent/15 text-accent">
                 {role === "admin" ? (
