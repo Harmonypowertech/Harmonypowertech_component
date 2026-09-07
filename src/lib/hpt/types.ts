@@ -13,6 +13,8 @@ export type ComponentRecord = {
   updated_at: string;
   created_by: string | null;
   created_by_name: string | null;
+  updated_by?: string | null;
+  updated_by_name?: string | null;
   is_demo: boolean;
 };
 

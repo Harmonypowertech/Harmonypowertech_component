@@ -1,8 +1,8 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
-import { AlertCircle, Boxes, ChevronLeft, ChevronRight, Eye, History, KeyRound, Layers, Loader2, PackageMinus, Pencil, RotateCcw, Search, Trash2, UserPlus, Users, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { AlertCircle, Boxes, Calendar, ChevronLeft, ChevronRight, Eye, Filter, History, KeyRound, Layers, Loader2, PackageMinus, Pencil, RotateCcw, Search, Trash2, UserPlus, Users, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppHeader } from "@/components/hpt/AppHeader";
@@ -51,6 +51,7 @@ import {
 } from "@/lib/hpt/admin.functions";
 import { deleteComponentFn, getAllComponentSuggestionsFn, listComponentNamesFn, listSubCategoriesFn, pickComponentFn, searchComponentsFn, updateComponentFn } from "@/lib/hpt/components.functions";
 import { errorMessage, type ComponentRecord, type PickLogRecord } from "@/lib/hpt/types";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/admin")({
   ssr: false,
@@ -152,24 +153,43 @@ function AdminConsole() {
   const [quantityFilter, setQuantityFilter] = useState("all");
   const [page, setPage] = useState(1);
 
-  const statsQuery = useQuery({ queryKey: ["admin", "stats"], queryFn: () => stats() });
-  const usersQuery = useQuery({ queryKey: ["admin", "users"], queryFn: () => listUsers() });
+  // Recent Activity Filters state
+  const [activitySearch, setActivitySearch] = useState("");
+  const [activityCompFilter, setActivityCompFilter] = useState("all");
+  const [activityEmployeeFilter, setActivityEmployeeFilter] = useState("all");
+  const [activityDateFilter, setActivityDateFilter] = useState("all");
+  const [activityCustomDate, setActivityCustomDate] = useState("");
+
+  const statsQuery = useQuery({
+    queryKey: ["admin", "stats"],
+    queryFn: () => stats(),
+    refetchInterval: 4000,
+  });
+  const usersQuery = useQuery({
+    queryKey: ["admin", "users"],
+    queryFn: () => listUsers(),
+    refetchInterval: 5000,
+  });
   const namesQuery = useQuery({
     queryKey: ["component-names"],
     queryFn: () => getComponentNames(),
+    refetchInterval: 6000,
   });
   const subCategoriesQuery = useQuery({
     queryKey: ["sub-categories"],
     queryFn: () => getSubCategories(),
+    refetchInterval: 6000,
   });
   const allSuggestionsQuery = useQuery({
     queryKey: ["all-component-suggestions"],
     queryFn: () => getAllSuggestions(),
-    staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 3,
+    refetchInterval: 10000,
   });
   const componentsQuery = useQuery({
     queryKey: ["admin", "components", query, nameFilter, subCategoryFilter, quantityFilter, page],
     queryFn: () => searchComponents({ data: { query, nameFilter, subCategoryFilter, quantityFilter, page, pageSize: 100 } }),
+    refetchInterval: 3000,
   });
 
   function refreshAll() {
@@ -177,6 +197,184 @@ function AdminConsole() {
     queryClient.invalidateQueries({ queryKey: ["components"] });
     queryClient.invalidateQueries({ queryKey: ["component-names"] });
     queryClient.invalidateQueries({ queryKey: ["sub-categories"] });
+    queryClient.invalidateQueries({ queryKey: ["all-component-suggestions"] });
+    queryClient.invalidateQueries({ queryKey: ["inventory-stats"] });
+  }
+
+  // Real-time Supabase Postgres Sync
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      channel = supabase
+        .channel("admin-realtime-sync")
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "components" },
+          () => {
+            refreshAll();
+          },
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "component_pick_logs" },
+          () => {
+            refreshAll();
+          },
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "app_users" },
+          () => {
+            refreshAll();
+          },
+        )
+        .subscribe();
+    } catch {
+      // Fallback relies on polling
+    }
+
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, []);
+
+  // Compute completely unique component names across DB and inventory
+  const uniqueComponentNames = useMemo(() => {
+    const set = new Set<string>();
+    (namesQuery.data ?? []).forEach((name) => {
+      const clean = (name || "").trim().toUpperCase();
+      if (clean) set.add(clean);
+    });
+    (allSuggestionsQuery.data ?? []).forEach((item) => {
+      const clean = (item.component_name || "").trim().toUpperCase();
+      if (clean) set.add(clean);
+    });
+    (componentsQuery.data?.items ?? []).forEach((item) => {
+      const clean = (item.component_name || "").trim().toUpperCase();
+      if (clean) set.add(clean);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [namesQuery.data, allSuggestionsQuery.data, componentsQuery.data?.items]);
+
+  // Compute unique employee names for Recent Activity filter
+  const uniqueEmployees = useMemo(() => {
+    const set = new Set<string>();
+    (usersQuery.data ?? []).forEach((u) => {
+      if (u.name?.trim()) set.add(u.name.trim());
+    });
+    (statsQuery.data?.recentPicks ?? []).forEach((p: PickLogRecord) => {
+      if (p.taken_by_name?.trim()) set.add(p.taken_by_name.trim());
+    });
+    (statsQuery.data?.recent ?? []).forEach((c: ComponentRecord) => {
+      if (c.created_by_name?.trim()) set.add(c.created_by_name.trim());
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [usersQuery.data, statsQuery.data?.recentPicks, statsQuery.data?.recent]);
+
+  // Compute unique component names present in pick logs & recent activity
+  const uniqueActivityComponentNames = useMemo(() => {
+    const set = new Set<string>();
+    (statsQuery.data?.recentPicks ?? []).forEach((p: PickLogRecord) => {
+      if (p.component_name?.trim()) set.add(p.component_name.trim().toUpperCase());
+    });
+    (statsQuery.data?.recent ?? []).forEach((c: ComponentRecord) => {
+      if (c.component_name?.trim()) set.add(c.component_name.trim().toUpperCase());
+    });
+    uniqueComponentNames.forEach((n) => set.add(n));
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [statsQuery.data?.recentPicks, statsQuery.data?.recent, uniqueComponentNames]);
+
+  // Filter pick logs based on Component Name, Employee, Date, and Search
+  const filteredRecentPicks = useMemo(() => {
+    const picks = (statsQuery.data?.recentPicks ?? []) as PickLogRecord[];
+    return picks.filter((p) => {
+      if (activityCompFilter !== "all" && (p.component_name || "").toUpperCase() !== activityCompFilter.toUpperCase()) {
+        return false;
+      }
+      if (activityEmployeeFilter !== "all" && (p.taken_by_name || "").toLowerCase() !== activityEmployeeFilter.toLowerCase()) {
+        return false;
+      }
+      if (activityDateFilter === "today") {
+        const itemDate = new Date(p.created_at).toDateString();
+        const today = new Date().toDateString();
+        if (itemDate !== today) return false;
+      } else if (activityDateFilter === "7days") {
+        const itemTime = new Date(p.created_at).getTime();
+        const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        if (itemTime < sevenDaysAgo) return false;
+      } else if (activityDateFilter === "30days") {
+        const itemTime = new Date(p.created_at).getTime();
+        const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        if (itemTime < thirtyDaysAgo) return false;
+      } else if (activityDateFilter === "custom" && activityCustomDate) {
+        const itemDateStr = new Date(p.created_at).toISOString().split("T")[0];
+        if (itemDateStr !== activityCustomDate) return false;
+      }
+      if (activitySearch.trim()) {
+        const q = activitySearch.trim().toLowerCase();
+        const matched =
+          (p.component_name && p.component_name.toLowerCase().includes(q)) ||
+          (p.part_number && p.part_number.toLowerCase().includes(q)) ||
+          (p.cupboard_number && p.cupboard_number.toLowerCase().includes(q)) ||
+          (p.reason && p.reason.toLowerCase().includes(q)) ||
+          (p.taken_by_name && p.taken_by_name.toLowerCase().includes(q));
+        if (!matched) return false;
+      }
+      return true;
+    });
+  }, [statsQuery.data?.recentPicks, activityCompFilter, activityEmployeeFilter, activityDateFilter, activityCustomDate, activitySearch]);
+
+  // Filter recently added components based on Component Name, Employee, Date, and Search
+  const filteredRecentAdditions = useMemo(() => {
+    const recent = (statsQuery.data?.recent ?? []) as ComponentRecord[];
+    return recent.filter((c) => {
+      if (activityCompFilter !== "all" && (c.component_name || "").toUpperCase() !== activityCompFilter.toUpperCase()) {
+        return false;
+      }
+      if (activityEmployeeFilter !== "all" && (c.created_by_name || "").toLowerCase() !== activityEmployeeFilter.toLowerCase()) {
+        return false;
+      }
+      if (activityDateFilter === "today") {
+        const itemDate = new Date(c.created_at).toDateString();
+        const today = new Date().toDateString();
+        if (itemDate !== today) return false;
+      } else if (activityDateFilter === "7days") {
+        const itemTime = new Date(c.created_at).getTime();
+        const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        if (itemTime < sevenDaysAgo) return false;
+      } else if (activityDateFilter === "30days") {
+        const itemTime = new Date(c.created_at).getTime();
+        const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        if (itemTime < thirtyDaysAgo) return false;
+      } else if (activityDateFilter === "custom" && activityCustomDate) {
+        const itemDateStr = new Date(c.created_at).toISOString().split("T")[0];
+        if (itemDateStr !== activityCustomDate) return false;
+      }
+      if (activitySearch.trim()) {
+        const q = activitySearch.trim().toLowerCase();
+        const matched =
+          (c.component_name && c.component_name.toLowerCase().includes(q)) ||
+          (c.part_number && c.part_number.toLowerCase().includes(q)) ||
+          (c.cupboard_number && c.cupboard_number.toLowerCase().includes(q)) ||
+          (c.created_by_name && c.created_by_name.toLowerCase().includes(q));
+        if (!matched) return false;
+      }
+      return true;
+    });
+  }, [statsQuery.data?.recent, activityCompFilter, activityEmployeeFilter, activityDateFilter, activityCustomDate, activitySearch]);
+
+  const hasActivityFilters = Boolean(
+    activitySearch || activityCompFilter !== "all" || activityEmployeeFilter !== "all" || activityDateFilter !== "all" || activityCustomDate
+  );
+
+  function resetActivityFilters() {
+    setActivitySearch("");
+    setActivityCompFilter("all");
+    setActivityEmployeeFilter("all");
+    setActivityDateFilter("all");
+    setActivityCustomDate("");
   }
 
   const addUser = useMutation({
@@ -472,7 +670,7 @@ function AdminConsole() {
                 placeholder="Search components by any field..."
               />
 
-              {/* Component Name Filter */}
+              {/* Component Name Filter (Unique names across inventory & database) */}
               <div className="w-full lg:w-52">
                 <Select
                   value={nameFilter}
@@ -484,9 +682,9 @@ function AdminConsole() {
                   <SelectTrigger aria-label="Filter by Component Name">
                     <SelectValue placeholder="All Component Names" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-72">
                     <SelectItem value="all">All Component Names</SelectItem>
-                    {(namesQuery.data ?? []).map((name) => (
+                    {uniqueComponentNames.map((name) => (
                       <SelectItem key={name} value={name}>
                         {name}
                       </SelectItem>
@@ -683,6 +881,123 @@ function AdminConsole() {
           </TabsContent>
 
           <TabsContent value="recent" className="mt-4 space-y-8">
+            {/* Filter Bar for Recent Activity */}
+            <div className="rounded-xl border border-border bg-card p-4 shadow-2xs">
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <Filter className="size-4 text-primary" aria-hidden />
+                    <span>Filter Recent Activity</span>
+                  </div>
+                  {hasActivityFilters && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={resetActivityFilters}
+                      className="h-7 gap-1 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      <RotateCcw className="size-3" aria-hidden />
+                      Reset Filters
+                    </Button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {/* Search keyword */}
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
+                    <Input
+                      placeholder="Search component, reason, employee..."
+                      value={activitySearch}
+                      onChange={(e) => setActivitySearch(e.target.value)}
+                      className="h-9 pl-8 text-xs"
+                    />
+                    {activitySearch && (
+                      <button
+                        type="button"
+                        onClick={() => setActivitySearch("")}
+                        className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Component Name Filter */}
+                  <div>
+                    <Select
+                      value={activityCompFilter}
+                      onValueChange={(val) => setActivityCompFilter(val)}
+                    >
+                      <SelectTrigger className="h-9 text-xs" aria-label="Filter by Component Name">
+                        <SelectValue placeholder="All Component Names" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-72">
+                        <SelectItem value="all">All Component Names</SelectItem>
+                        {uniqueActivityComponentNames.map((name) => (
+                          <SelectItem key={name} value={name}>
+                            {name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Employee Filter */}
+                  <div>
+                    <Select
+                      value={activityEmployeeFilter}
+                      onValueChange={(val) => setActivityEmployeeFilter(val)}
+                    >
+                      <SelectTrigger className="h-9 text-xs" aria-label="Filter by Employee">
+                        <SelectValue placeholder="All Employees" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-72">
+                        <SelectItem value="all">All Employees</SelectItem>
+                        {uniqueEmployees.map((emp) => (
+                          <SelectItem key={emp} value={emp}>
+                            {emp}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Date Filter */}
+                  <div className="flex gap-2">
+                    <Select
+                      value={activityDateFilter}
+                      onValueChange={(val) => {
+                        setActivityDateFilter(val);
+                        if (val !== "custom") setActivityCustomDate("");
+                      }}
+                    >
+                      <SelectTrigger className="h-9 flex-1 text-xs" aria-label="Filter by Date">
+                        <SelectValue placeholder="All Dates" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Dates</SelectItem>
+                        <SelectItem value="today">Today</SelectItem>
+                        <SelectItem value="7days">Last 7 Days</SelectItem>
+                        <SelectItem value="30days">Last 30 Days</SelectItem>
+                        <SelectItem value="custom">Specific Date…</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    {activityDateFilter === "custom" && (
+                      <Input
+                        type="date"
+                        value={activityCustomDate}
+                        onChange={(e) => setActivityCustomDate(e.target.value)}
+                        className="h-9 w-36 text-xs"
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Component Pick Activity Logs */}
             <div>
               <div className="mb-3 flex items-center justify-between">
@@ -695,17 +1010,24 @@ function AdminConsole() {
                     Real-time record of all components taken by employees along with reason and quantity.
                   </p>
                 </div>
-                <Badge variant="outline" className="text-xs">
-                  {(statsQuery.data?.recentPicks ?? []).length} Records
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-xs">
+                    {filteredRecentPicks.length} of {(statsQuery.data?.recentPicks ?? []).length} Records
+                    {hasActivityFilters ? " (Filtered)" : ""}
+                  </Badge>
+                </div>
               </div>
 
-              {(statsQuery.data?.recentPicks ?? []).length === 0 ? (
+              {filteredRecentPicks.length === 0 ? (
                 <div className="card-elevated p-8 text-center">
                   <PackageMinus className="mx-auto size-8 text-muted-foreground/50" aria-hidden />
-                  <p className="mt-2 text-sm font-medium text-foreground">No pick activity recorded yet</p>
+                  <p className="mt-2 text-sm font-medium text-foreground">
+                    {hasActivityFilters ? "No pick activity matches your filter criteria" : "No pick activity recorded yet"}
+                  </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    When employees take components using the &quot;Pick&quot; button, their reason and quantity will appear here.
+                    {hasActivityFilters
+                      ? "Try clearing or adjusting the filters above."
+                      : "When employees take components using the 'Pick' button, their reason and quantity will appear here."}
                   </p>
                 </div>
               ) : (
@@ -725,11 +1047,11 @@ function AdminConsole() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {(statsQuery.data?.recentPicks ?? []).map((pickLog: PickLogRecord, idx: number) => (
+                      {filteredRecentPicks.map((pickLog: PickLogRecord, idx: number) => (
                         <tr key={pickLog.id} className="transition-colors hover:bg-muted/50">
                           <td className="px-2 py-2.5 text-center font-mono text-[11px] text-muted-foreground">{idx + 1}</td>
                           <td className="px-2.5 py-2.5 font-medium text-foreground">
-                            <span className="block truncate" title={pickLog.component_name}>
+                            <span className="block truncate font-semibold" title={pickLog.component_name}>
                               {pickLog.component_name}
                             </span>
                           </td>
@@ -753,7 +1075,7 @@ function AdminConsole() {
                             </div>
                           </td>
                           <td className="px-2 py-2.5 font-medium text-foreground">
-                            <span className="block truncate" title={pickLog.taken_by_name}>
+                            <span className="block truncate font-semibold" title={pickLog.taken_by_name}>
                               {pickLog.taken_by_name}
                             </span>
                           </td>
@@ -776,14 +1098,22 @@ function AdminConsole() {
 
             {/* Recently Added Components */}
             <div>
-              <div className="mb-3">
-                <h2 className="text-base font-semibold text-foreground">Recently Added Components</h2>
-                <p className="text-xs text-muted-foreground">Components recently created in the inventory.</p>
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-semibold text-foreground">Recently Added Components</h2>
+                  <p className="text-xs text-muted-foreground">Components recently created in the inventory.</p>
+                </div>
+                <Badge variant="outline" className="text-xs">
+                  {filteredRecentAdditions.length} of {(statsQuery.data?.recent ?? []).length} Additions
+                  {hasActivityFilters ? " (Filtered)" : ""}
+                </Badge>
               </div>
-              {(statsQuery.data?.recent ?? []).length === 0 ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">No recent additions.</p>
+              {filteredRecentAdditions.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  {hasActivityFilters ? "No recently added components match your filters." : "No recent additions."}
+                </p>
               ) : (
-                <ComponentTable items={(statsQuery.data?.recent ?? []) as ComponentRecord[]} showMeta />
+                <ComponentTable items={filteredRecentAdditions as ComponentRecord[]} showMeta />
               )}
             </div>
           </TabsContent>

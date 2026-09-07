@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, Boxes, ChevronLeft, ChevronRight, Eye, Layers, Loader2, PackageMinus, PackagePlus, Pencil, RotateCcw, Search, Tag, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -40,6 +40,7 @@ import {
   updateComponentFn,
 } from "@/lib/hpt/components.functions";
 import { errorMessage, type ComponentRecord } from "@/lib/hpt/types";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/dashboard")({
   ssr: false,
@@ -124,27 +125,32 @@ function Dashboard() {
   const statsQuery = useQuery({
     queryKey: ["inventory-stats"],
     queryFn: () => getInventoryStats(),
+    refetchInterval: 4000,
   });
 
   const namesQuery = useQuery({
     queryKey: ["component-names"],
     queryFn: () => getComponentNames(),
+    refetchInterval: 6000,
   });
 
   const subCategoriesQuery = useQuery({
     queryKey: ["sub-categories"],
     queryFn: () => getSubCategories(),
+    refetchInterval: 6000,
   });
 
   const allSuggestionsQuery = useQuery({
     queryKey: ["all-component-suggestions"],
     queryFn: () => getAllSuggestions(),
-    staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 3,
+    refetchInterval: 10000,
   });
 
   const list = useQuery({
     queryKey: ["components", query, nameFilter, subCategoryFilter, quantityFilter, page],
     queryFn: () => search({ data: { query, nameFilter, subCategoryFilter, quantityFilter, page, pageSize: 100 } }),
+    refetchInterval: 3000,
   });
 
   function refreshComponents() {
@@ -152,8 +158,60 @@ function Dashboard() {
     queryClient.invalidateQueries({ queryKey: ["component-names"] });
     queryClient.invalidateQueries({ queryKey: ["sub-categories"] });
     queryClient.invalidateQueries({ queryKey: ["inventory-stats"] });
+    queryClient.invalidateQueries({ queryKey: ["all-component-suggestions"] });
     queryClient.invalidateQueries({ queryKey: ["admin"] });
+    queryClient.invalidateQueries({ queryKey: ["my-pick-history"] });
   }
+
+  // Real-time Postgres Changes Subscription for Multi-user Instant Sync
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      channel = supabase
+        .channel("dashboard-realtime-sync")
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "components" },
+          () => {
+            refreshComponents();
+          },
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "component_pick_logs" },
+          () => {
+            refreshComponents();
+          },
+        )
+        .subscribe();
+    } catch {
+      // Background polling handles fallback
+    }
+
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, []);
+
+  // Compute completely unique, deduplicated component names across queries and current table
+  const uniqueComponentNames = useMemo(() => {
+    const set = new Set<string>();
+    (namesQuery.data ?? []).forEach((name) => {
+      const clean = (name || "").trim().toUpperCase();
+      if (clean) set.add(clean);
+    });
+    (allSuggestionsQuery.data ?? []).forEach((item) => {
+      const clean = (item.component_name || "").trim().toUpperCase();
+      if (clean) set.add(clean);
+    });
+    (list.data?.items ?? []).forEach((item) => {
+      const clean = (item.component_name || "").trim().toUpperCase();
+      if (clean) set.add(clean);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [namesQuery.data, allSuggestionsQuery.data, list.data?.items]);
 
   const create = useMutation({
     mutationFn: (input: {
@@ -434,7 +492,7 @@ function Dashboard() {
               placeholder="Search components by name, part number, manufacturer, vendor, cupboard..."
             />
 
-            {/* Component Name Filter (Fetched directly from DB) */}
+            {/* Component Name Filter (Unique names across inventory & database) */}
             <div className="w-full lg:w-48">
               <Select
                 value={nameFilter}
@@ -446,9 +504,9 @@ function Dashboard() {
                 <SelectTrigger aria-label="Filter by Component Name">
                   <SelectValue placeholder="All Component Names" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-72">
                   <SelectItem value="all">All Component Names</SelectItem>
-                  {(namesQuery.data ?? []).map((name) => (
+                  {uniqueComponentNames.map((name) => (
                     <SelectItem key={name} value={name}>
                       {name}
                     </SelectItem>

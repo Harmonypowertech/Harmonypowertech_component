@@ -113,14 +113,12 @@ export async function authenticate(loginId: string, password: string, expectAdmi
 
 /* ---------------------------- components ---------------------------- */
 
-const COMPONENT_COLUMNS =
-  "id, component_name, sub_category, part_number, quantity, cupboard_number, manufacturer, vendor, specification, package, created_at, updated_at, created_by, is_demo";
+// In-memory cache for fast, reliable editor tracking
+const _recentEditorMap = new Map<string, { editorId: string; editorName: string; updatedAt: string }>();
 
-const LEGACY_COMPONENT_COLUMNS =
-  "id, component_name, part_number, quantity, cupboard_number, manufacturer, vendor, specification, package, created_at, updated_at, created_by, is_demo";
-
-const BASE_COMPONENT_COLUMNS =
-  "id, component_name, part_number, quantity, cupboard_number, created_at, updated_at, created_by, is_demo";
+const COMPONENT_COLUMNS = "*";
+const LEGACY_COMPONENT_COLUMNS = "*";
+const BASE_COMPONENT_COLUMNS = "*";
 
 async function attachCreators(rows: Record<string, unknown>[]): Promise<ComponentRecord[]> {
   if (!rows || rows.length === 0) return [];
@@ -132,12 +130,48 @@ async function attachCreators(rows: Record<string, unknown>[]): Promise<Componen
     if (u.user_id) userMap.set(u.user_id.toLowerCase(), u.name);
   });
 
+  // Fetch recent edit logs in bulk for these component IDs if table exists
+  const ids = rows.map((r) => r["id"] as string).filter(Boolean);
+  const dbEditMap = new Map<string, { editorId: string; editorName: string }>();
+  if (ids.length > 0) {
+    try {
+      const { data: editLogs } = await client
+        .from("component_edit_logs")
+        .select("component_id, editor_id, editor_name, created_at")
+        .in("component_id", ids)
+        .order("created_at", { ascending: false });
+
+      (editLogs ?? []).forEach((log: { component_id?: string; editor_id?: string; editor_name?: string }) => {
+        if (log.component_id && !dbEditMap.has(log.component_id)) {
+          dbEditMap.set(log.component_id, {
+            editorId: log.editor_id || "",
+            editorName: log.editor_name || "",
+          });
+        }
+      });
+    } catch {
+      // Graceful fallback if table is not created
+    }
+  }
+
   return rows.map((r) => {
     const creatorId = r["created_by"] as string | undefined;
     let resolvedName = (r["created_by_name"] as string) || null;
     if (!resolvedName && creatorId) {
       resolvedName = userMap.get(creatorId.toLowerCase()) ?? null;
     }
+
+    const compId = r["id"] as string | undefined;
+    const inMem = compId ? _recentEditorMap.get(compId) : undefined;
+    const dbEdit = compId ? dbEditMap.get(compId) : undefined;
+
+    const updaterId = (r["updated_by"] as string | undefined) || inMem?.editorId || dbEdit?.editorId || undefined;
+    let resolvedUpdaterName = (r["updated_by_name"] as string) || inMem?.editorName || dbEdit?.editorName || null;
+
+    if (!resolvedUpdaterName && updaterId) {
+      resolvedUpdaterName = userMap.get(updaterId.toLowerCase()) ?? null;
+    }
+
     return {
       ...(r as unknown as ComponentRecord),
       component_name: typeof r["component_name"] === "string" ? (r["component_name"] as string).toUpperCase() : ((r["component_name"] as string) || ""),
@@ -149,6 +183,8 @@ async function attachCreators(rows: Record<string, unknown>[]): Promise<Componen
       specification: typeof r["specification"] === "string" ? (r["specification"] as string).toUpperCase() : (r["specification"] as string | null | undefined) ?? null,
       package: typeof r["package"] === "string" ? (r["package"] as string).toUpperCase() : (r["package"] as string | null | undefined) ?? null,
       created_by_name: resolvedName || (r["is_demo"] ? "Demo Data" : "HPT Administrator"),
+      updated_by: updaterId ?? null,
+      updated_by_name: resolvedUpdaterName || null,
     };
   });
 }
@@ -169,11 +205,32 @@ export async function getInventoryStats() {
 export async function listComponentNames(): Promise<string[]> {
   const client = await db();
   try {
+    const { data, error } = await client
+      .from("components")
+      .select("component_name")
+      .order("component_name", { ascending: true })
+      .limit(10000);
+
+    if (!error && data) {
+      const names = Array.from(
+        new Set(
+          data
+            .map((row) => (row.component_name || "").trim().toUpperCase())
+            .filter(Boolean),
+        ),
+      ).sort((a, b) => a.localeCompare(b));
+      return names;
+    }
+  } catch {
+    // Fall back to RPC
+  }
+
+  try {
     const token = await getAdminDbToken();
     const { data, error } = await client.rpc("hpt_search_components", {
       _session_token: token,
       _query: "",
-      _limit: 200,
+      _limit: 5000,
     });
     if (!error && data && Array.isArray(data)) {
       const names = Array.from(
@@ -186,23 +243,10 @@ export async function listComponentNames(): Promise<string[]> {
       return names;
     }
   } catch {
-    // Fall back to direct query
+    // Graceful fallback
   }
 
-  const { data } = await client
-    .from("components")
-    .select("component_name")
-    .order("component_name", { ascending: true })
-    .limit(1000);
-
-  const names = Array.from(
-    new Set(
-      (data ?? [])
-        .map((row) => (row.component_name || "").trim().toUpperCase())
-        .filter(Boolean),
-    ),
-  ) as string[];
-  return names;
+  return [];
 }
 
 export async function listSubCategories(): Promise<string[]> {
@@ -561,7 +605,12 @@ export async function createComponent(input: ComponentInput, createdBy?: string)
   fail("Unable to save component. Please try again.");
 }
 
-export async function updateComponent(id: string, input: ComponentInput) {
+export async function updateComponent(
+  id: string,
+  input: ComponentInput,
+  updatedBy?: string,
+  updatedByName?: string,
+) {
   const client = await db();
   const v = validateComponent(input);
 
@@ -571,7 +620,32 @@ export async function updateComponent(id: string, input: ComponentInput) {
     fail(`Validation Error: Another component with Part Number "${v.partNumber}" and Package "${v.package || "—"}" already exists in the inventory.`);
   }
 
-  // Tier 1: Direct table update with sub_category
+  const nowIso = new Date().toISOString();
+
+  // Save immediately to in-memory editor cache
+  if (updatedBy || updatedByName) {
+    _recentEditorMap.set(id, {
+      editorId: updatedBy || "",
+      editorName: updatedByName || "Employee",
+      updatedAt: nowIso,
+    });
+  }
+
+  // Attempt to write into component_edit_logs table if it exists
+  try {
+    await client.from("component_edit_logs").insert({
+      component_id: id,
+      component_name: v.componentName,
+      part_number: v.partNumber,
+      editor_id: updatedBy ?? null,
+      editor_name: updatedByName || "Employee",
+      created_at: nowIso,
+    });
+  } catch {
+    // If table doesn't exist, in-memory cache and updated_by column handle it
+  }
+
+  // Tier 1: Direct table update with sub_category and updated_by
   try {
     const updateObj: Record<string, unknown> = {
       component_name: v.componentName,
@@ -582,6 +656,36 @@ export async function updateComponent(id: string, input: ComponentInput) {
       vendor: v.vendor,
       specification: v.specification,
       package: v.package,
+      updated_at: nowIso,
+    };
+    if (v.subCategory !== undefined) {
+      updateObj.sub_category = v.subCategory;
+    }
+    if (updatedBy) {
+      updateObj.updated_by = updatedBy;
+    }
+
+    const { error } = await client
+      .from("components")
+      .update(updateObj)
+      .eq("id", id);
+    if (!error) return { ok: true };
+  } catch {
+    // Continue fallback
+  }
+
+  // Tier 2: Direct table update with sub_category (without updated_by)
+  try {
+    const updateObj: Record<string, unknown> = {
+      component_name: v.componentName,
+      part_number: v.partNumber,
+      quantity: v.quantity,
+      cupboard_number: v.cupboardNumber,
+      manufacturer: v.manufacturer,
+      vendor: v.vendor,
+      specification: v.specification,
+      package: v.package,
+      updated_at: nowIso,
     };
     if (v.subCategory !== undefined) {
       updateObj.sub_category = v.subCategory;
@@ -596,7 +700,7 @@ export async function updateComponent(id: string, input: ComponentInput) {
     // Continue fallback
   }
 
-  // Tier 2: 9-parameter RPC
+  // Tier 3: 9-parameter RPC
   try {
     const token = await getAdminDbToken();
     const { data, error } = await client.rpc("hpt_update_component", {
@@ -616,7 +720,7 @@ export async function updateComponent(id: string, input: ComponentInput) {
     // Continue fallback
   }
 
-  // Tier 3: Legacy direct update without sub_category
+  // Tier 4: Legacy direct update without sub_category
   try {
     const { error } = await client
       .from("components")
@@ -629,6 +733,7 @@ export async function updateComponent(id: string, input: ComponentInput) {
         vendor: v.vendor,
         specification: v.specification,
         package: v.package,
+        updated_at: nowIso,
       })
       .eq("id", id);
     if (!error) return { ok: true };
@@ -636,7 +741,7 @@ export async function updateComponent(id: string, input: ComponentInput) {
     // Continue fallback
   }
 
-  // Tier 3: 5-parameter RPC
+  // Tier 5: 5-parameter RPC
   try {
     const token = await getAdminDbToken();
     const { data, error } = await client.rpc("hpt_update_component", {
@@ -652,7 +757,7 @@ export async function updateComponent(id: string, input: ComponentInput) {
     // Continue fallback
   }
 
-  // Tier 4: Base 5-column direct update
+  // Tier 6: Base 5-column direct update
   const { error } = await client
     .from("components")
     .update({
@@ -660,6 +765,7 @@ export async function updateComponent(id: string, input: ComponentInput) {
       part_number: v.partNumber,
       quantity: v.quantity,
       cupboard_number: v.cupboardNumber,
+      updated_at: nowIso,
     })
     .eq("id", id);
 
@@ -906,6 +1012,31 @@ export async function deleteUser(id: string) {
   return { ok: true };
 }
 
+export async function getMyPickHistory(userId?: string, userName?: string): Promise<PickLogRecord[]> {
+  const client = await db();
+  try {
+    let query = client.from("component_pick_logs").select("*");
+    if (userId && userName) {
+      query = query.or(`taken_by.eq.${userId},taken_by_name.ilike.%${userName}%`);
+    } else if (userId) {
+      query = query.eq("taken_by", userId);
+    } else if (userName) {
+      query = query.ilike("taken_by_name", `%${userName}%`);
+    }
+
+    const { data, error } = await query
+      .order("created_at", { ascending: false })
+      .limit(500);
+
+    if (!error && data) {
+      return data as PickLogRecord[];
+    }
+  } catch (err) {
+    console.error("Failed to load pick history:", err);
+  }
+  return [];
+}
+
 /* ---------------------------- statistics ---------------------------- */
 
 export async function dashboardStats() {
@@ -915,8 +1046,8 @@ export async function dashboardStats() {
     client.from("app_users").select("id", { count: "exact", head: true }).eq("role", "user"),
     client.from("components").select("id", { count: "exact", head: true }),
     client.from("components").select("quantity"),
-    client.from("components").select(COMPONENT_COLUMNS).order("created_at", { ascending: false }).limit(10),
-    client.from("component_pick_logs").select("*").order("created_at", { ascending: false }).limit(50),
+    client.from("components").select(COMPONENT_COLUMNS).order("created_at", { ascending: false }).limit(20),
+    client.from("component_pick_logs").select("*").order("created_at", { ascending: false }).limit(500),
   ]);
 
   const totalQuantity = (quantities.data ?? []).reduce((sum, row) => sum + (row.quantity ?? 0), 0);

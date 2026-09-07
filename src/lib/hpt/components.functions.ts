@@ -107,9 +107,9 @@ export const updateComponentFn = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { requireUser } = await import("./session.server");
     const { updateComponent } = await import("./data.server");
-    await requireUser();
+    const session = await requireUser();
     const { id, ...rest } = data;
-    return await updateComponent(id, rest);
+    return await updateComponent(id, rest, session.uid, session.name);
   });
 
 export const deleteComponentFn = createServerFn({ method: "POST" })
@@ -135,3 +135,10 @@ export const pickComponentFn = createServerFn({ method: "POST" })
     const session = await requireUser();
     return await pickComponent(data, session.uid, session.name);
   });
+
+export const getMyPickHistoryFn = createServerFn({ method: "GET" }).handler(async () => {
+  const { requireUser } = await import("./session.server");
+  const { getMyPickHistory } = await import("./data.server");
+  const session = await requireUser();
+  return await getMyPickHistory(session.uid, session.name);
+});

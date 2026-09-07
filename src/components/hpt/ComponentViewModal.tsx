@@ -183,15 +183,35 @@ export function ComponentViewModal({ item, open, onOpenChange }: Props) {
           {/* Metadata Section */}
           <div className="grid grid-cols-1 gap-3 rounded-md border border-border/40 bg-muted/20 p-3 text-xs text-muted-foreground sm:grid-cols-2">
             <div className="flex items-center gap-1.5">
-              <User className="size-3.5" aria-hidden />
+              <User className="size-3.5 text-primary" aria-hidden />
               <span>Added By: <strong className="text-foreground">{item.created_by_name ?? "HPT Administrator"}</strong></span>
             </div>
             <div className="flex items-center gap-1.5">
-              <Calendar className="size-3.5" aria-hidden />
+              <Calendar className="size-3.5 text-primary" aria-hidden />
               <span>
                 Created:{" "}
                 <strong className="text-foreground">
                   {new Date(item.created_at).toLocaleString()}
+                </strong>
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 border-t border-border/30 pt-2 sm:border-t-0 sm:pt-0">
+              <User className="size-3.5 text-accent" aria-hidden />
+              <span>
+                Last Edited By:{" "}
+                <strong className="text-foreground">
+                  {item.updated_by_name || item.updated_by || "Not edited yet"}
+                </strong>
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 border-t border-border/30 pt-2 sm:border-t-0 sm:pt-0">
+              <Calendar className="size-3.5 text-accent" aria-hidden />
+              <span>
+                Last Updated:{" "}
+                <strong className="text-foreground">
+                  {item.updated_by_name || (item.updated_at && item.updated_at !== item.created_at)
+                    ? new Date(item.updated_at).toLocaleString()
+                    : "Not updated"}
                 </strong>
               </span>
             </div>
